@@ -34,8 +34,11 @@ import {
   Text,
   View,
 } from "react-native";
+import { OfferModal } from "./components/OfferModal";
+import { ReportModal } from "./components/ReportModal";
 import { SellModal } from "./components/SellModal";
 import {
+  categoryIcons,
   demoUsers,
   seedConversations,
   seedListings,
@@ -47,7 +50,17 @@ import { MessagesPage } from "./pages/MessagesPage";
 import { MyListingsPage } from "./pages/MyListingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SavedPage } from "./pages/SavedPage";
-import { Conversation, DemoUser, Listing, Message, SortOption, Tab } from "./types";
+import { themeColors } from "./theme";
+import {
+  Conversation,
+  DemoUser,
+  Listing,
+  Message,
+  Offer,
+  SortOption,
+  Tab,
+  ThemeMode,
+} from "./types";
 
 async function registerUser(user: User) {
   if (!db) return;
@@ -70,7 +83,11 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
   const [items, setItems] = useState<Listing[]>(seedListings);
 
-  // Search & Filter state (Feature 1 - Student 2)
+  // Theme state (Dark / Light mode)
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const colors = themeColors[themeMode];
+
+  // Search & Filter state (Feature 1)
   const [queryText, setQueryText] = useState("");
   const [category, setCategory] = useState("All items");
   const [campusFilter, setCampusFilter] = useState("All campuses");
@@ -79,19 +96,21 @@ export default function App() {
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [hideSold, setHideSold] = useState(false);
 
-  // User & Demo Team Switcher state (Feature 5 - Student 5)
+  // User & Demo Team Switcher state (Feature 5)
   const [currentDemoUser, setCurrentDemoUser] = useState<DemoUser>(demoUsers[0]);
   const [user, setUser] = useState<User | null>(auth?.currentUser || null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authError, setAuthError] = useState("");
   const [profileReady, setProfileReady] = useState(false);
 
-  // Listing creation & detail state (Feature 2 & 3 - Students 1 & 3)
+  // Listing creation, detail, offer & report state
   const [sellOpen, setSellOpen] = useState(false);
   const [savedIds, setSavedIds] = useState<string[]>(["1"]);
   const [selected, setSelected] = useState<Listing | null>(null);
+  const [offerModalOpen, setOfferModalOpen] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
-  // Messaging state (Feature 4 - Student 4)
+  // Messaging state (Feature 4)
   const [conversations, setConversations] = useState<Conversation[]>(
     seedConversations,
   );
@@ -161,7 +180,7 @@ export default function App() {
     );
   }, []);
 
-  // Filtered & Sorted items calculation (Feature 1)
+  // Filtered & Sorted items calculation
   const filteredItems = useMemo(() => {
     let result = items.filter((item) => {
       if (category !== "All items" && item.category !== category) return false;
@@ -218,6 +237,10 @@ export default function App() {
     setHideSold(false);
   };
 
+  const handleToggleTheme = () => {
+    setThemeMode((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
   // Active user identity for demo / Firebase
   const activeUserId = user ? user.uid : currentDemoUser.uid;
   const activeUserName = user
@@ -253,7 +276,7 @@ export default function App() {
     );
   };
 
-  // Toggle Sold Status (Feature 3)
+  // Toggle Sold Status
   const handleToggleSold = (listingId: string) => {
     setItems((prev) =>
       prev.map((item) =>
@@ -265,7 +288,7 @@ export default function App() {
     }
   };
 
-  // Delete Listing (Feature 3)
+  // Delete Listing
   const handleDeleteListing = (listingId: string) => {
     setItems((prev) => prev.filter((item) => item.id !== listingId));
     setSavedIds((prev) => prev.filter((id) => id !== listingId));
@@ -274,7 +297,7 @@ export default function App() {
     }
   };
 
-  // Publish Listing (Feature 2)
+  // Publish Listing
   const handlePublish = async (listingData: {
     title: string;
     price: string;
@@ -295,6 +318,10 @@ export default function App() {
       description: listingData.description,
       seller: activeUserName,
       sellerId: activeUserId,
+      sellerMajor: currentDemoUser.major?.split(" ")[0] || "Student",
+      sellerGradYear: currentDemoUser.gradYear?.replace("Class of ", "") || "'26",
+      sellerRating: 5.0,
+      meetupsCount: 1,
       isSold: false,
       createdAt: Date.now(),
     };
@@ -316,7 +343,7 @@ export default function App() {
     setTab("Explore");
   };
 
-  // Initiate or open conversation for a listing (Feature 4)
+  // Contact Seller
   const handleContactSeller = (listing: Listing) => {
     let conv = conversations.find(
       (c) => c.listingId === listing.id && c.buyerId === activeUserId,
@@ -353,6 +380,7 @@ export default function App() {
               hour: "2-digit",
               minute: "2-digit",
             }),
+            type: "text",
           },
         ],
       }));
@@ -363,7 +391,151 @@ export default function App() {
     setTab("Messages");
   };
 
-  // Send a message inside chat (Feature 4)
+  // Submit Offer
+  const handleSubmitOffer = (amount: number) => {
+    if (!selected) return;
+
+    const targetListing = selected;
+    let conv = conversations.find(
+      (c) => c.listingId === targetListing.id && c.buyerId === activeUserId,
+    );
+
+    const newOffer: Offer = {
+      id: `offer-${Date.now()}`,
+      amount,
+      originalPrice: targetListing.price,
+      status: "pending",
+      buyerId: activeUserId,
+      buyerName: activeUserName,
+      createdAt: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+
+    const convId = conv ? conv.id : `conv-${Date.now()}`;
+
+    if (!conv) {
+      conv = {
+        id: convId,
+        listingId: targetListing.id,
+        listingTitle: targetListing.title,
+        listingPrice: targetListing.price,
+        listingImage: targetListing.image,
+        buyerId: activeUserId,
+        buyerName: activeUserName,
+        sellerId: targetListing.sellerId || "student-seller",
+        sellerName: targetListing.seller,
+        lastMessage: `Offered $${amount}`,
+        lastMessageTime: "Just now",
+        activeOffer: newOffer,
+      };
+      setConversations((prev) => [conv!, ...prev]);
+    } else {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === convId
+            ? {
+                ...c,
+                lastMessage: `Offered $${amount}`,
+                lastMessageTime: "Just now",
+                activeOffer: newOffer,
+              }
+            : c,
+        ),
+      );
+    }
+
+    const offerMsg: Message = {
+      id: `msg-offer-${Date.now()}`,
+      conversationId: convId,
+      senderId: activeUserId,
+      senderName: activeUserName,
+      text: `${activeUserName} offered $${amount} for ${targetListing.title}`,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      type: "offer",
+      offer: newOffer,
+    };
+
+    setMessages((prev) => ({
+      ...prev,
+      [convId]: [...(prev[convId] || []), offerMsg],
+    }));
+
+    setSelected(null);
+    setActiveConversationId(convId);
+    setTab("Messages");
+  };
+
+  // Respond to Offer (Accept / Decline)
+  const handleRespondOffer = (
+    convId: string,
+    offerId: string,
+    accepted: boolean,
+  ) => {
+    const timeStr = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    // Update messages offer status
+    setMessages((prev) => {
+      const list = prev[convId] || [];
+      const updated = list.map((m) =>
+        m.offer && m.offer.id === offerId
+          ? {
+              ...m,
+              offer: {
+                ...m.offer,
+                status: (accepted ? "accepted" : "declined") as
+                  | "accepted"
+                  | "declined",
+              },
+            }
+          : m,
+      );
+
+      const statusMsg: Message = {
+        id: `msg-status-${Date.now()}`,
+        conversationId: convId,
+        senderId: activeUserId,
+        senderName: activeUserName,
+        text: accepted
+          ? `✓ Offer accepted! Let's arrange a campus meetup spot.`
+          : `Offer was declined.`,
+        timestamp: timeStr,
+        type: "text",
+      };
+
+      return { ...prev, [convId]: [...updated, statusMsg] };
+    });
+
+    // Update conversation state
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === convId && c.activeOffer
+          ? {
+              ...c,
+              activeOffer: {
+                ...c.activeOffer,
+                status: (accepted ? "accepted" : "declined") as
+                  | "accepted"
+                  | "declined",
+              },
+              lastMessage: accepted
+                ? `Offer of $${c.activeOffer.amount} accepted!`
+                : `Offer declined.`,
+              lastMessageTime: "Just now",
+            }
+          : c,
+      ),
+    );
+  };
+
+  // Send a message inside chat
   const handleSendMessage = (
     convId: string,
     text: string,
@@ -382,6 +554,7 @@ export default function App() {
       senderName,
       text,
       timestamp: timeStr,
+      type: "text",
     };
 
     setMessages((prev) => ({
@@ -399,6 +572,14 @@ export default function App() {
             }
           : c,
       ),
+    );
+  };
+
+  // Submit Safety Report
+  const handleSubmitReport = (reason: string, details: string) => {
+    if (!selected) return;
+    setItems((prev) =>
+      prev.map((i) => (i.id === selected.id ? { ...i, isReported: true } : i)),
     );
   };
 
@@ -433,8 +614,10 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
+      <StatusBar style={themeMode === "dark" ? "light" : "dark"} />
 
       {/* Main Pages */}
       {tab === "Explore" && (
@@ -450,6 +633,8 @@ export default function App() {
           savedIds={savedIds}
           currentUserName={activeUserName}
           currentUserAvatar={currentDemoUser.photoURL}
+          themeMode={themeMode}
+          onToggleTheme={handleToggleTheme}
           onQueryChange={setQueryText}
           onCategoryChange={setCategory}
           onCampusChange={setCampusFilter}
@@ -482,6 +667,7 @@ export default function App() {
           onSelectConversation={(id) => setActiveConversationId(id)}
           onBackToList={() => setActiveConversationId(null)}
           onSendMessage={handleSendMessage}
+          onRespondOffer={handleRespondOffer}
           onBrowse={() => setTab("Explore")}
           onOpenListing={(listingId) => {
             const itm = items.find((i) => i.id === listingId);
@@ -511,6 +697,8 @@ export default function App() {
           firebaseConfigured={firebaseConfigured}
           profileReady={profileReady}
           error={authError}
+          themeMode={themeMode}
+          onToggleTheme={handleToggleTheme}
           onSelectDemoUser={(dUser) => setCurrentDemoUser(dUser)}
           onMyListings={() => setTab("MyListings")}
           onSaved={() => setTab("Saved")}
@@ -524,6 +712,7 @@ export default function App() {
         tab={tab}
         savedCount={savedIds.length}
         messageCount={conversations.length}
+        themeMode={themeMode}
         onChange={setTab}
         onSell={() => setSellOpen(true)}
       />
@@ -532,13 +721,32 @@ export default function App() {
       <ListingModal
         item={selected}
         currentUserId={activeUserId}
+        themeMode={themeMode}
         onClose={() => setSelected(null)}
         onContact={() => selected && handleContactSeller(selected)}
+        onMakeOffer={() => setOfferModalOpen(true)}
+        onReport={() => setReportModalOpen(true)}
         onToggleSold={() => selected && handleToggleSold(selected.id)}
         onDelete={() => selected && handleDeleteListing(selected.id)}
       />
 
-      {/* Sell Modal (Feature 2) */}
+      {/* Make an Offer Modal */}
+      <OfferModal
+        visible={offerModalOpen}
+        listing={selected}
+        onClose={() => setOfferModalOpen(false)}
+        onSubmitOffer={handleSubmitOffer}
+      />
+
+      {/* Report Listing Safety Modal */}
+      <ReportModal
+        visible={reportModalOpen}
+        listing={selected}
+        onClose={() => setReportModalOpen(false)}
+        onSubmitReport={handleSubmitReport}
+      />
+
+      {/* Sell Modal */}
       <SellModal
         visible={sellOpen}
         onClose={() => setSellOpen(false)}
@@ -560,21 +768,31 @@ function BottomNav({
   tab,
   savedCount,
   messageCount,
+  themeMode,
   onChange,
   onSell,
 }: {
   tab: Tab;
   savedCount: number;
   messageCount: number;
+  themeMode: ThemeMode;
   onChange: (tab: Tab) => void;
   onSell: () => void;
 }) {
+  const colors = themeColors[themeMode];
+
   return (
-    <View style={styles.nav}>
+    <View
+      style={[
+        styles.nav,
+        { backgroundColor: colors.navBg, borderTopColor: colors.navBorder },
+      ]}
+    >
       <NavItem
         label="Explore"
         icon="⌂"
         active={tab === "Explore"}
+        themeMode={themeMode}
         onPress={() => onChange("Explore")}
       />
       <NavItem
@@ -582,6 +800,7 @@ function BottomNav({
         icon="♡"
         active={tab === "Saved"}
         badge={savedCount > 0 ? savedCount : undefined}
+        themeMode={themeMode}
         onPress={() => onChange("Saved")}
       />
       <NavItem
@@ -589,15 +808,20 @@ function BottomNav({
         icon="💬"
         active={tab === "Messages"}
         badge={messageCount > 0 ? messageCount : undefined}
+        themeMode={themeMode}
         onPress={() => onChange("Messages")}
       />
       <NavItem
         label="My Items"
         icon="🏷"
         active={tab === "MyListings"}
+        themeMode={themeMode}
         onPress={() => onChange("MyListings")}
       />
-      <Pressable style={styles.sellButton} onPress={onSell}>
+      <Pressable
+        style={[styles.sellButton, { backgroundColor: colors.primary }]}
+        onPress={onSell}
+      >
         <Text style={styles.sellPlus}>＋</Text>
         <Text style={styles.sellText}>Sell</Text>
       </Pressable>
@@ -610,25 +834,45 @@ function NavItem({
   icon,
   active,
   badge,
+  themeMode,
   onPress,
 }: {
   label: string;
   icon: string;
   active: boolean;
   badge?: number;
+  themeMode: ThemeMode;
   onPress: () => void;
 }) {
+  const colors = themeColors[themeMode];
+
   return (
     <Pressable style={styles.navItem} onPress={onPress}>
       <View>
-        <Text style={[styles.navIcon, active && styles.navActive]}>{icon}</Text>
+        <Text
+          style={[
+            styles.navIcon,
+            { color: colors.muted },
+            active && { color: colors.primary },
+          ]}
+        >
+          {icon}
+        </Text>
         {badge ? (
-          <View style={styles.badge}>
+          <View style={[styles.badge, { backgroundColor: colors.danger }]}>
             <Text style={styles.badgeText}>{badge}</Text>
           </View>
         ) : null}
       </View>
-      <Text style={[styles.navLabel, active && styles.navActive]}>{label}</Text>
+      <Text
+        style={[
+          styles.navLabel,
+          { color: colors.muted },
+          active && { color: colors.primary },
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -636,22 +880,30 @@ function NavItem({
 function ListingModal({
   item,
   currentUserId,
+  themeMode,
   onClose,
   onContact,
+  onMakeOffer,
+  onReport,
   onToggleSold,
   onDelete,
 }: {
   item: Listing | null;
   currentUserId: string;
+  themeMode: ThemeMode;
   onClose: () => void;
   onContact: () => void;
+  onMakeOffer: () => void;
+  onReport: () => void;
   onToggleSold: () => void;
   onDelete: () => void;
 }) {
   if (!item) return null;
 
+  const colors = themeColors[themeMode];
   const isOwner = item.sellerId === currentUserId;
   const isSold = Boolean(item.isSold);
+  const icon = categoryIcons[item.category] || "🏷️";
 
   return (
     <Modal
@@ -661,7 +913,7 @@ function ListingModal({
       onRequestClose={onClose}
     >
       <View style={styles.backdrop}>
-        <View style={styles.detail}>
+        <View style={[styles.detail, { backgroundColor: colors.card }]}>
           <Image source={{ uri: item.image }} style={styles.detailImage} />
           <Pressable style={styles.close} onPress={onClose}>
             <Text style={styles.closeText}>×</Text>
@@ -670,47 +922,135 @@ function ListingModal({
           <ScrollView style={styles.detailBody} showsVerticalScrollIndicator={false}>
             {/* Category and Condition Badges */}
             <View style={styles.badgeRow}>
-              <View style={styles.detailCategoryPill}>
+              <View
+                style={[
+                  styles.detailCategoryPill,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
                 <Text style={styles.detailCategory}>
-                  {item.category.toUpperCase()}
+                  {icon} {item.category.toUpperCase()}
                 </Text>
               </View>
-              <View style={styles.conditionPill}>
-                <Text style={styles.conditionText}>{item.condition}</Text>
+              <View
+                style={[
+                  styles.conditionPill,
+                  { backgroundColor: colors.cardSecondary },
+                ]}
+              >
+                <Text style={[styles.conditionText, { color: colors.primary }]}>
+                  {item.condition}
+                </Text>
               </View>
-              <View style={styles.campusPill}>
-                <Text style={styles.campusText}>{item.campus}</Text>
+              <View
+                style={[
+                  styles.campusPill,
+                  { backgroundColor: colors.cardSecondary },
+                ]}
+              >
+                <Text
+                  style={[styles.campusText, { color: colors.textSecondary }]}
+                >
+                  📍 {item.campus}
+                </Text>
               </View>
             </View>
 
             {/* Sold Banner if Item is Sold */}
             {isSold && (
-              <View style={styles.soldBanner}>
-                <Text style={styles.soldBannerTitle}>⚠️ ITEM MARKED AS SOLD</Text>
-                <Text style={styles.soldBannerDesc}>
+              <View
+                style={[
+                  styles.soldBanner,
+                  {
+                    backgroundColor: colors.dangerLight,
+                    borderColor: colors.danger,
+                  },
+                ]}
+              >
+                <Text style={[styles.soldBannerTitle, { color: colors.danger }]}>
+                  ⚠️ ITEM MARKED AS SOLD
+                </Text>
+                <Text style={[styles.soldBannerDesc, { color: colors.danger }]}>
                   This item has already found a buyer on campus.
                 </Text>
               </View>
             )}
 
-            <Text style={[styles.detailTitle, isSold && styles.titleSold]}>
+            <Text
+              style={[
+                styles.detailTitle,
+                { color: colors.text },
+                isSold && styles.titleSold,
+              ]}
+            >
               {item.title}
             </Text>
-            <Text style={[styles.detailPrice, isSold && styles.priceSold]}>
+            <Text
+              style={[
+                styles.detailPrice,
+                { color: colors.accent },
+                isSold && styles.priceSold,
+              ]}
+            >
               ${item.price}
             </Text>
 
-            <Text style={styles.sellerLine}>
-              Listed by <Text style={styles.boldText}>{item.seller}</Text>
+            {/* Seller Student Profile Card */}
+            <View
+              style={[
+                styles.sellerProfileBox,
+                {
+                  backgroundColor: colors.cardSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={styles.sellerHeader}>
+                <View>
+                  <Text style={[styles.sellerName, { color: colors.text }]}>
+                    {item.seller}
+                  </Text>
+                  <Text style={[styles.sellerMajor, { color: colors.muted }]}>
+                    🎓 {item.sellerMajor || "Student"} · Class of{" "}
+                    {item.sellerGradYear || "'26"}
+                  </Text>
+                </View>
+                {item.sellerRating ? (
+                  <View style={styles.sellerRatingBox}>
+                    <Text style={styles.sellerRatingValue}>
+                      ⭐️ {item.sellerRating}
+                    </Text>
+                    <Text style={styles.sellerMeetups}>
+                      {item.meetupsCount || 10} meetups
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
+            <Text style={[styles.descHeading, { color: colors.text }]}>
+              Description & Campus Meetup
+            </Text>
+            <Text
+              style={[styles.description, { color: colors.textSecondary }]}
+            >
+              {item.description}
             </Text>
 
-            <Text style={styles.descHeading}>Description</Text>
-            <Text style={styles.description}>{item.description}</Text>
-
-            {/* Owner Management Controls (Feature 3) */}
+            {/* Owner Management Controls */}
             {isOwner && (
-              <View style={styles.ownerControls}>
-                <Text style={styles.ownerHeading}>Seller Management</Text>
+              <View
+                style={[
+                  styles.ownerControls,
+                  {
+                    backgroundColor: colors.cardSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.ownerHeading, { color: colors.primary }]}>
+                  Seller Management
+                </Text>
                 <View style={styles.ownerButtonsRow}>
                   <Pressable
                     style={[
@@ -739,17 +1079,48 @@ function ListingModal({
               </View>
             )}
 
-            {/* Buyer Contact Button */}
+            {/* Buyer Contact & Make an Offer Buttons */}
             {!isOwner && (
-              <Pressable
-                disabled={isSold}
-                style={[styles.primary, isSold && styles.primaryDisabled]}
-                onPress={onContact}
-              >
-                <Text style={styles.primaryText}>
-                  {isSold ? "Item Sold" : `💬 Message ${item.seller}`}
-                </Text>
-              </Pressable>
+              <View style={styles.buyerActionWrap}>
+                <View style={styles.actionButtonsRow}>
+                  <Pressable
+                    disabled={isSold}
+                    style={[
+                      styles.primary,
+                      { backgroundColor: colors.primary, flex: 1 },
+                      isSold && styles.primaryDisabled,
+                    ]}
+                    onPress={onContact}
+                  >
+                    <Text style={styles.primaryText}>
+                      {isSold ? "Item Sold" : `💬 Message Seller`}
+                    </Text>
+                  </Pressable>
+
+                  {!isSold && (
+                    <Pressable
+                      style={[
+                        styles.offerBtn,
+                        { borderColor: colors.primary },
+                      ]}
+                      onPress={onMakeOffer}
+                    >
+                      <Text
+                        style={[styles.offerBtnText, { color: colors.primary }]}
+                      >
+                        🤝 Offer
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {/* Report Listing Link */}
+                <Pressable style={styles.reportRow} onPress={onReport}>
+                  <Text style={styles.reportText}>
+                    🚩 Flag or Report this listing
+                  </Text>
+                </Pressable>
+              </View>
             )}
           </ScrollView>
         </View>
@@ -800,9 +1171,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 82,
-    backgroundColor: "#FFF",
     borderTopWidth: 1,
-    borderTopColor: "#E8EBE5",
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
@@ -816,23 +1185,17 @@ const styles = StyleSheet.create({
   },
   navIcon: {
     fontSize: 20,
-    color: "#85938B",
     textAlign: "center",
   },
   navLabel: {
     fontSize: 10,
-    color: "#85938B",
     marginTop: 2,
     fontWeight: "700",
-  },
-  navActive: {
-    color: "#1F5D4C",
   },
   badge: {
     position: "absolute",
     top: -4,
     right: -10,
-    backgroundColor: "#B64950",
     borderRadius: 9,
     minWidth: 18,
     height: 18,
@@ -846,7 +1209,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   sellButton: {
-    backgroundColor: "#1F5D4C",
     borderRadius: 20,
     flexDirection: "row",
     alignItems: "center",
@@ -870,7 +1232,6 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   detail: {
-    backgroundColor: "#FFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "92%",
@@ -909,7 +1270,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   detailCategoryPill: {
-    backgroundColor: "#1F5D4C",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -921,47 +1281,38 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   conditionPill: {
-    backgroundColor: "#E7EFEA",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   conditionText: {
-    color: "#1F5D4C",
     fontSize: 10,
     fontWeight: "700",
   },
   campusPill: {
-    backgroundColor: "#ECEFE9",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   campusText: {
-    color: "#4A5A52",
     fontSize: 10,
     fontWeight: "700",
   },
   soldBanner: {
-    backgroundColor: "#FDF0F1",
     borderWidth: 1,
-    borderColor: "#F5C2C7",
     padding: 12,
     borderRadius: 10,
     marginBottom: 12,
   },
   soldBannerTitle: {
-    color: "#B64950",
     fontWeight: "800",
     fontSize: 12,
     marginBottom: 2,
   },
   soldBannerDesc: {
-    color: "#7E3238",
     fontSize: 11,
   },
   detailTitle: {
-    color: "#173C34",
     fontSize: 22,
     fontWeight: "800",
     marginBottom: 6,
@@ -971,7 +1322,6 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
   },
   detailPrice: {
-    color: "#1C7057",
     fontSize: 24,
     fontWeight: "900",
     marginBottom: 8,
@@ -980,31 +1330,49 @@ const styles = StyleSheet.create({
     color: "#87918C",
     textDecorationLine: "line-through",
   },
-  sellerLine: {
-    color: "#65766D",
-    fontSize: 13,
+  sellerProfileBox: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
     marginBottom: 16,
   },
-  boldText: {
-    fontWeight: "700",
-    color: "#173C34",
+  sellerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sellerName: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  sellerMajor: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  sellerRatingBox: {
+    alignItems: "flex-end",
+  },
+  sellerRatingValue: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#2E594B",
+  },
+  sellerMeetups: {
+    fontSize: 10,
+    color: "#87918C",
   },
   descHeading: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#173C34",
     marginBottom: 6,
   },
   description: {
-    color: "#4A5A52",
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 20,
   },
   ownerControls: {
-    backgroundColor: "#F7F9F6",
     borderWidth: 1,
-    borderColor: "#E2E7DF",
     borderRadius: 14,
     padding: 14,
     marginBottom: 18,
@@ -1012,7 +1380,6 @@ const styles = StyleSheet.create({
   ownerHeading: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#1F5D4C",
     marginBottom: 10,
     letterSpacing: 0.5,
   },
@@ -1051,13 +1418,40 @@ const styles = StyleSheet.create({
     color: "#C3535B",
     fontWeight: "700",
   },
+  buyerActionWrap: {
+    marginBottom: 20,
+    gap: 10,
+  },
+  actionButtonsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  offerBtn: {
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  offerBtnText: {
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  reportRow: {
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  reportText: {
+    fontSize: 11,
+    color: "#87918C",
+    fontWeight: "600",
+  },
   primary: {
-    backgroundColor: "#1F5D4C",
     height: 50,
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
   },
   primaryDisabled: {
     backgroundColor: "#A8B4AD",

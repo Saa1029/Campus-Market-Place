@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { EmptyState } from "../components/EmptyState";
 import { PageTitle } from "../components/PageTitle";
-import { Conversation, Listing, Message } from "../types";
+import { Conversation, Message, Offer } from "../types";
 
 export function MessagesPage({
   conversations,
@@ -24,6 +24,7 @@ export function MessagesPage({
   onSelectConversation,
   onBackToList,
   onSendMessage,
+  onRespondOffer,
   onBrowse,
   onOpenListing,
 }: {
@@ -39,6 +40,11 @@ export function MessagesPage({
     text: string,
     senderId: string,
     senderName: string,
+  ) => void;
+  onRespondOffer?: (
+    conversationId: string,
+    offerId: string,
+    accepted: boolean,
   ) => void;
   onBrowse: () => void;
   onOpenListing?: (listingId: string) => void;
@@ -86,6 +92,8 @@ export function MessagesPage({
     const senderDisplayName =
       demoSenderRole === "current" ? currentUserName : otherPartyName;
 
+    const isCurrentSeller = activeConv.sellerId === currentUserId;
+
     return (
       <KeyboardAvoidingView
         style={styles.chatContainer}
@@ -116,7 +124,7 @@ export function MessagesPage({
               {activeConv.listingTitle}
             </Text>
             <Text style={styles.listingBannerPrice}>
-              ${activeConv.listingPrice}
+              Asking: ${activeConv.listingPrice}
             </Text>
           </View>
           {onOpenListing && (
@@ -175,6 +183,83 @@ export function MessagesPage({
         >
           {activeMessages.map((msg) => {
             const isMe = msg.senderId === currentUserId;
+
+            // If message is an Offer Card
+            if (msg.type === "offer" && msg.offer) {
+              const offer = msg.offer;
+              const canRespond =
+                (isCurrentSeller || demoSenderRole === "other") &&
+                offer.status === "pending" &&
+                onRespondOffer;
+
+              return (
+                <View key={msg.id} style={styles.offerMessageWrapper}>
+                  <View style={styles.offerCard}>
+                    <View style={styles.offerHeader}>
+                      <Text style={styles.offerHeaderIcon}>🤝</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.offerTitle}>
+                          Offer from {msg.senderName.split(" ")[0]}
+                        </Text>
+                        <Text style={styles.offerSubtitle}>
+                          Original: ${offer.originalPrice}
+                        </Text>
+                      </View>
+                      <Text style={styles.offerAmount}>${offer.amount}</Text>
+                    </View>
+
+                    {offer.status === "pending" && (
+                      <View style={styles.offerStatusPending}>
+                        <Text style={styles.offerStatusPendingText}>
+                          ⏳ Pending Seller Review
+                        </Text>
+                        {canRespond && (
+                          <View style={styles.offerActionRow}>
+                            <Pressable
+                              style={styles.acceptBtn}
+                              onPress={() =>
+                                onRespondOffer(activeConv.id, offer.id, true)
+                              }
+                            >
+                              <Text style={styles.acceptBtnText}>
+                                ✓ Accept Offer
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={styles.declineBtn}
+                              onPress={() =>
+                                onRespondOffer(activeConv.id, offer.id, false)
+                              }
+                            >
+                              <Text style={styles.declineBtnText}>Decline</Text>
+                            </Pressable>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {offer.status === "accepted" && (
+                      <View style={styles.offerStatusAccepted}>
+                        <Text style={styles.offerStatusAcceptedText}>
+                          ✅ Offer Accepted for ${offer.amount}!
+                        </Text>
+                      </View>
+                    )}
+
+                    {offer.status === "declined" && (
+                      <View style={styles.offerStatusDeclined}>
+                        <Text style={styles.offerStatusDeclinedText}>
+                          ❌ Offer of ${offer.amount} was declined.
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.messageTimeCenter}>{msg.timestamp}</Text>
+                </View>
+              );
+            }
+
+            // Normal Text Message
             return (
               <View
                 key={msg.id}
@@ -297,6 +382,14 @@ export function MessagesPage({
                 <Text style={styles.lastMessageText} numberOfLines={1}>
                   {item.lastMessage}
                 </Text>
+
+                {item.activeOffer && item.activeOffer.status === "accepted" && (
+                  <View style={styles.agreedBadge}>
+                    <Text style={styles.agreedBadgeText}>
+                      Agreed Offer: ${item.activeOffer.amount}
+                    </Text>
+                  </View>
+                )}
               </View>
             </Pressable>
           );
@@ -357,6 +450,19 @@ const styles = StyleSheet.create({
   lastMessageText: {
     fontSize: 13,
     color: "#54665D",
+  },
+  agreedBadge: {
+    backgroundColor: "#E4EDE6",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  agreedBadgeText: {
+    color: "#1F5D4C",
+    fontSize: 10,
+    fontWeight: "800",
   },
   // Chat View Styles
   chatContainer: {
@@ -525,6 +631,115 @@ const styles = StyleSheet.create({
     color: "#99A39D",
     marginTop: 3,
     marginHorizontal: 6,
+  },
+  messageTimeCenter: {
+    fontSize: 10,
+    color: "#99A39D",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  // Offer Card Styles
+  offerMessageWrapper: {
+    width: "100%",
+    alignItems: "center",
+    marginVertical: 6,
+  },
+  offerCard: {
+    width: "90%",
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#B4CDB7",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  offerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  offerHeaderIcon: {
+    fontSize: 22,
+  },
+  offerTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#173C34",
+  },
+  offerSubtitle: {
+    fontSize: 11,
+    color: "#87918C",
+  },
+  offerAmount: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#1C7057",
+  },
+  offerStatusPending: {
+    borderTopWidth: 1,
+    borderTopColor: "#EEF1EC",
+    paddingTop: 8,
+  },
+  offerStatusPendingText: {
+    fontSize: 11,
+    color: "#B0792E",
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  offerActionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  acceptBtn: {
+    flex: 1,
+    backgroundColor: "#1F5D4C",
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  acceptBtnText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  declineBtn: {
+    backgroundColor: "#FDF0F1",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  declineBtnText: {
+    color: "#B64950",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  offerStatusAccepted: {
+    backgroundColor: "#E4EDE6",
+    padding: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  offerStatusAcceptedText: {
+    color: "#1F5D4C",
+    fontWeight: "800",
+    fontSize: 12,
+  },
+  offerStatusDeclined: {
+    backgroundColor: "#FDF0F1",
+    padding: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  offerStatusDeclinedText: {
+    color: "#B64950",
+    fontWeight: "700",
+    fontSize: 12,
   },
   quickRepliesRow: {
     paddingHorizontal: 12,

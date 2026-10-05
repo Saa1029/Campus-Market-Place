@@ -9,7 +9,8 @@ import {
 import { User } from "firebase/auth";
 import { PageTitle } from "../components/PageTitle";
 import { demoUsers } from "../data";
-import { DemoUser } from "../types";
+import { themeColors } from "../theme";
+import { DemoUser, ThemeMode } from "../types";
 
 export function ProfilePage({
   user,
@@ -21,6 +22,8 @@ export function ProfilePage({
   firebaseConfigured,
   profileReady,
   error,
+  themeMode = "light",
+  onToggleTheme,
   onSelectDemoUser,
   onMyListings,
   onSaved,
@@ -36,12 +39,16 @@ export function ProfilePage({
   firebaseConfigured: boolean;
   profileReady: boolean;
   error: string;
+  themeMode?: ThemeMode;
+  onToggleTheme?: () => void;
   onSelectDemoUser: (demoUser: DemoUser) => void;
   onMyListings: () => void;
   onSaved: () => void;
   onSignIn: () => void;
   onSignOut: () => void;
 }) {
+  const colors = themeColors[themeMode];
+
   const name =
     currentDemoUser?.displayName ||
     user?.displayName ||
@@ -52,6 +59,10 @@ export function ProfilePage({
     currentDemoUser?.email || user?.email || "student@campus.edu";
 
   const campus = currentDemoUser?.campus || "North Campus";
+  const major = currentDemoUser?.major || "Computer Science B.S.";
+  const gradYear = currentDemoUser?.gradYear || "Class of '26";
+  const rating = currentDemoUser?.rating || 4.9;
+  const meetupsCount = currentDemoUser?.meetupsCount || 15;
   const photo = currentDemoUser?.photoURL || user?.photoURL;
 
   const initials = name
@@ -62,64 +73,120 @@ export function ProfilePage({
     .toUpperCase();
 
   return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        { backgroundColor: colors.background },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <PageTitle title="Student Profile" subtitle="Your campus marketplace hub" />
 
       {/* Hero Profile Card */}
-      <View style={styles.heroCard}>
+      <View
+        style={[
+          styles.heroCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
         <View style={styles.heroHeader}>
           {photo ? (
             <Image source={{ uri: photo }} style={styles.avatar} />
           ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.initials}>{initials}</Text>
+            <View
+              style={[
+                styles.avatar,
+                { backgroundColor: colors.primaryLight, borderColor: colors.primary },
+              ]}
+            >
+              <Text style={[styles.initials, { color: colors.primary }]}>
+                {initials}
+              </Text>
             </View>
           )}
 
           <View style={styles.heroText}>
             <View style={styles.nameRow}>
-              <Text style={styles.name} numberOfLines={1}>
+              <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
                 {name}
               </Text>
             </View>
-            <Text style={styles.emailText}>{email}</Text>
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓ Verified Student · {campus}</Text>
+            <Text style={[styles.subText, { color: colors.muted }]}>
+              🎓 {major} · {gradYear}
+            </Text>
+            <Text style={[styles.emailText, { color: colors.muted }]}>{email}</Text>
+            <View style={styles.badgeRow}>
+              <View
+                style={[styles.verifiedBadge, { backgroundColor: colors.primaryLight }]}
+              >
+                <Text style={[styles.verifiedText, { color: colors.primary }]}>
+                  ✓ Verified Student
+                </Text>
+              </View>
+              <View
+                style={[styles.ratingBadge, { backgroundColor: colors.cardSecondary }]}
+              >
+                <Text style={[styles.ratingText, { color: colors.textSecondary }]}>
+                  ⭐️ {rating} ({meetupsCount} meetups)
+                </Text>
+              </View>
             </View>
           </View>
         </View>
 
         {/* Dashboard Statistics */}
-        <View style={styles.statsRow}>
+        <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
           <Pressable style={styles.statBox} onPress={onMyListings}>
-            <Text style={styles.statValue}>{listingCount}</Text>
-            <Text style={styles.statLabel}>Active</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {listingCount}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Active</Text>
           </Pressable>
 
           <Pressable style={styles.statBox} onPress={onMyListings}>
-            <Text style={[styles.statValue, { color: "#B64950" }]}>{soldCount}</Text>
-            <Text style={styles.statLabel}>Sold</Text>
+            <Text style={[styles.statValue, { color: colors.danger }]}>
+              {soldCount}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Sold</Text>
           </Pressable>
 
           <View style={styles.statBox}>
-            <Text style={[styles.statValue, { color: "#1C7057" }]}>${totalEarnings}</Text>
-            <Text style={styles.statLabel}>Earned</Text>
+            <Text style={[styles.statValue, { color: colors.accent }]}>
+              ${totalEarnings}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Earned</Text>
           </View>
 
           <Pressable style={styles.statBox} onPress={onSaved}>
-            <Text style={styles.statValue}>{savedCount}</Text>
-            <Text style={styles.statLabel}>Saved</Text>
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {savedCount}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Saved</Text>
           </Pressable>
         </View>
       </View>
 
       {/* Demo Presentation Profile Switcher */}
-      <View style={styles.sectionCard}>
+      <View
+        style={[
+          styles.sectionCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Demo Team Switcher</Text>
-          <Text style={styles.demoTag}>5-Member Assignment Mode</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Demo Team Switcher
+          </Text>
+          <Text
+            style={[
+              styles.demoTag,
+              { backgroundColor: colors.primaryLight, color: colors.primary },
+            ]}
+          >
+            5-Member Assignment Mode
+          </Text>
         </View>
-        <Text style={styles.sectionDescription}>
+        <Text style={[styles.sectionDescription, { color: colors.muted }]}>
           Switch active team member profile for video recording demonstration:
         </Text>
 
@@ -131,29 +198,52 @@ export function ProfilePage({
                 key={dUser.uid}
                 style={[
                   styles.demoUserRow,
-                  isSelected && styles.demoUserRowSelected,
+                  {
+                    backgroundColor: colors.cardSecondary,
+                    borderColor: colors.border,
+                  },
+                  isSelected && {
+                    backgroundColor: colors.primaryLight,
+                    borderColor: colors.primary,
+                  },
                 ]}
                 onPress={() => onSelectDemoUser(dUser)}
               >
                 {dUser.photoURL ? (
                   <Image source={{ uri: dUser.photoURL }} style={styles.miniAvatar} />
                 ) : (
-                  <View style={styles.miniAvatar}>
-                    <Text style={styles.miniInitials}>{dUser.displayName[0]}</Text>
+                  <View
+                    style={[
+                      styles.miniAvatar,
+                      { backgroundColor: colors.primaryLight },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.miniInitials, { color: colors.primary }]}
+                    >
+                      {dUser.displayName[0]}
+                    </Text>
                   </View>
                 )}
                 <View style={styles.demoUserInfo}>
                   <Text
                     style={[
                       styles.demoUserName,
-                      isSelected && styles.demoUserNameSelected,
+                      { color: colors.textSecondary },
+                      isSelected && { color: colors.primary, fontWeight: "800" },
                     ]}
                   >
                     {dUser.displayName}
                   </Text>
-                  <Text style={styles.demoUserCampus}>{dUser.campus}</Text>
+                  <Text style={[styles.demoUserCampus, { color: colors.muted }]}>
+                    {dUser.major} · {dUser.campus}
+                  </Text>
                 </View>
-                {isSelected && <Text style={styles.checkMark}>✓ Active</Text>}
+                {isSelected && (
+                  <Text style={[styles.checkMark, { color: colors.primary }]}>
+                    ✓ Active
+                  </Text>
+                )}
               </Pressable>
             );
           })}
@@ -161,34 +251,66 @@ export function ProfilePage({
       </View>
 
       {/* Account Settings & Navigation */}
-      <View style={styles.menu}>
+      <View
+        style={[
+          styles.menu,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
         <Row
           label="My listings"
           value={`${listingCount} active · ${soldCount} sold`}
           onPress={onMyListings}
+          colors={colors}
         />
-        <Row label="Saved items" value={String(savedCount)} onPress={onSaved} />
-        <Row label="Campus meetup zone" value={campus} />
-        <Row label="Student safety guidelines" value="Read tips" />
+        <Row
+          label="Saved items"
+          value={String(savedCount)}
+          onPress={onSaved}
+          colors={colors}
+        />
+        <Row
+          label="Campus meetup zone"
+          value={campus}
+          colors={colors}
+        />
+        {onToggleTheme && (
+          <Row
+            label="Appearance"
+            value={themeMode === "dark" ? "Dark Mode 🌙" : "Light Mode ☀️"}
+            onPress={onToggleTheme}
+            colors={colors}
+          />
+        )}
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {user && profileReady ? (
-        <Text style={styles.success}>Profile synced to Firebase</Text>
+        <Text style={[styles.success, { color: colors.primary }]}>
+          Profile synced to Firebase
+        </Text>
       ) : null}
 
       {/* Auth Action */}
       {user ? (
-        <Pressable style={styles.outline} onPress={onSignOut}>
-          <Text style={styles.outlineText}>Sign out of Firebase</Text>
+        <Pressable
+          style={[styles.outline, { borderColor: colors.border }]}
+          onPress={onSignOut}
+        >
+          <Text style={[styles.outlineText, { color: colors.primary }]}>
+            Sign out of Firebase
+          </Text>
         </Pressable>
       ) : (
-        <Pressable style={styles.primary} onPress={onSignIn}>
+        <Pressable
+          style={[styles.primary, { backgroundColor: colors.primary }]}
+          onPress={onSignIn}
+        >
           <Text style={styles.primaryText}>Sign in with Google</Text>
         </Pressable>
       )}
 
-      <Text style={styles.backend}>
+      <Text style={[styles.backend, { color: colors.muted }]}>
         {firebaseConfigured
           ? "Connected to Cloud Firestore & Firebase Auth"
           : "Local Demo Mode Active · Zero setup required for presentation demo"}
@@ -201,15 +323,20 @@ function Row({
   label,
   value,
   onPress,
+  colors,
 }: {
   label: string;
   value: string;
   onPress?: () => void;
+  colors: any;
 }) {
   return (
-    <Pressable style={styles.row} onPress={onPress}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.muted}>{value} ›</Text>
+    <Pressable
+      style={[styles.row, { borderBottomColor: colors.border }]}
+      onPress={onPress}
+    >
+      <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+      <Text style={[styles.muted, { color: colors.muted }]}>{value} ›</Text>
     </Pressable>
   );
 }
@@ -217,11 +344,9 @@ function Row({
 const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 110 },
   heroCard: {
-    backgroundColor: "#FFF",
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#E9ECE6",
     marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -231,7 +356,7 @@ const styles = StyleSheet.create({
   },
   heroHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 14,
     marginBottom: 16,
   },
@@ -239,13 +364,11 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: "#D6E5D7",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#B4CDB7",
   },
-  initials: { fontSize: 24, color: "#225347", fontWeight: "800" },
+  initials: { fontSize: 24, fontWeight: "800" },
   heroText: {
     flex: 1,
   },
@@ -254,28 +377,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   name: {
-    color: "#173C34",
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 2,
   },
-  emailText: { color: "#87918C", fontSize: 12, marginBottom: 6 },
+  subText: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  emailText: { fontSize: 11, marginBottom: 8 },
+  badgeRow: {
+    flexDirection: "row",
+    gap: 6,
+    flexWrap: "wrap",
+  },
   verifiedBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "#E4EDE6",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   verifiedText: {
-    color: "#1F5D4C",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  ratingBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  ratingText: {
     fontSize: 10,
     fontWeight: "700",
   },
   statsRow: {
     flexDirection: "row",
     borderTopWidth: 1,
-    borderTopColor: "#EEF1EC",
     paddingTop: 12,
     gap: 8,
   },
@@ -286,20 +423,16 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#173C34",
   },
   statLabel: {
     fontSize: 11,
-    color: "#87918C",
     fontWeight: "600",
     marginTop: 2,
   },
   sectionCard: {
-    backgroundColor: "#FFF",
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E9ECE6",
     marginBottom: 16,
   },
   sectionHeader: {
@@ -311,20 +444,16 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#173C34",
   },
   demoTag: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#1F5D4C",
-    backgroundColor: "#E4EDE6",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
   },
   sectionDescription: {
     fontSize: 12,
-    color: "#87918C",
     marginBottom: 12,
   },
   demoUsersList: {
@@ -335,27 +464,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 10,
     borderRadius: 12,
-    backgroundColor: "#F8FAF7",
     borderWidth: 1,
-    borderColor: "#E4E8E1",
     gap: 10,
-  },
-  demoUserRowSelected: {
-    backgroundColor: "#E8F0EC",
-    borderColor: "#1F5D4C",
   },
   miniAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#D6E5D7",
     alignItems: "center",
     justifyContent: "center",
   },
   miniInitials: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#225347",
   },
   demoUserInfo: {
     flex: 1,
@@ -363,27 +484,18 @@ const styles = StyleSheet.create({
   demoUserName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#24483D",
-  },
-  demoUserNameSelected: {
-    color: "#1F5D4C",
-    fontWeight: "800",
   },
   demoUserCampus: {
     fontSize: 10,
-    color: "#87918C",
   },
   checkMark: {
-    color: "#1F5D4C",
     fontSize: 12,
     fontWeight: "800",
   },
   menu: {
-    backgroundColor: "#FFF",
     borderRadius: 16,
     paddingHorizontal: 18,
     borderWidth: 1,
-    borderColor: "#E9ECE6",
     marginBottom: 16,
   },
   row: {
@@ -392,13 +504,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#EEF1EC",
   },
-  label: { color: "#24483D", fontWeight: "700", fontSize: 13 },
-  muted: { color: "#87918C", fontSize: 12 },
+  label: { fontWeight: "700", fontSize: 13 },
+  muted: { fontSize: 12 },
   primary: {
     height: 48,
-    backgroundColor: "#1F5D4C",
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
@@ -409,13 +519,12 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#BCD0C3",
     justifyContent: "center",
     alignItems: "center",
     marginTop: 10,
   },
-  outlineText: { color: "#1F5D4C", fontWeight: "800", fontSize: 14 },
-  success: { color: "#23775D", fontSize: 12, fontWeight: "700", marginTop: 12, textAlign: "center" },
+  outlineText: { fontWeight: "800", fontSize: 14 },
+  success: { fontSize: 12, fontWeight: "700", marginTop: 12, textAlign: "center" },
   error: {
     color: "#B64950",
     backgroundColor: "#FBECEE",
@@ -427,7 +536,6 @@ const styles = StyleSheet.create({
   },
   backend: {
     textAlign: "center",
-    color: "#9BA59F",
     fontSize: 11,
     marginTop: 18,
   },

@@ -9,8 +9,9 @@ import {
   View,
 } from "react-native";
 import { ListingCard } from "../components/ListingCard";
-import { campuses, categories } from "../data";
-import { Listing, SortOption } from "../types";
+import { campuses, categories, categoryIcons } from "../data";
+import { themeColors } from "../theme";
+import { Listing, SortOption, ThemeMode } from "../types";
 
 export function ExplorePage({
   items,
@@ -24,6 +25,8 @@ export function ExplorePage({
   savedIds,
   currentUserAvatar,
   currentUserName,
+  themeMode = "light",
+  onToggleTheme,
   onQueryChange,
   onCategoryChange,
   onCampusChange,
@@ -47,6 +50,8 @@ export function ExplorePage({
   savedIds: string[];
   currentUserAvatar?: string | null;
   currentUserName?: string;
+  themeMode?: ThemeMode;
+  onToggleTheme?: () => void;
   onQueryChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
   onCampusChange: (value: string) => void;
@@ -60,6 +65,7 @@ export function ExplorePage({
   onProfile: () => void;
 }) {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const colors = themeColors[themeMode];
 
   const hasActiveFilters =
     category !== "All items" ||
@@ -70,35 +76,84 @@ export function ExplorePage({
     hideSold;
 
   return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        { backgroundColor: colors.background },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>CAMPUS MARKETPLACE</Text>
-          <Text style={styles.heading}>
+          <Text style={[styles.eyebrow, { color: colors.muted }]}>
+            CAMPUS MARKETPLACE
+          </Text>
+          <Text style={[styles.heading, { color: colors.text }]}>
             Find your next{"\n"}favorite thing.
           </Text>
         </View>
-        <Pressable style={styles.avatar} onPress={onProfile}>
-          <Text style={styles.avatarText}>
-            {currentUserName ? currentUserName[0].toUpperCase() : "👤"}
-          </Text>
-        </Pressable>
+
+        <View style={styles.headerActions}>
+          {onToggleTheme && (
+            <Pressable
+              style={[
+                styles.themeBtn,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+              onPress={onToggleTheme}
+            >
+              <Text style={styles.themeBtnIcon}>
+                {themeMode === "dark" ? "☀️" : "🌙"}
+              </Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            style={[
+              styles.avatar,
+              { backgroundColor: colors.primaryLight, borderColor: colors.primary },
+            ]}
+            onPress={onProfile}
+          >
+            <Text style={[styles.avatarText, { color: colors.primary }]}>
+              {currentUserName ? currentUserName[0].toUpperCase() : "👤"}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Campus Trust Banner */}
+      <View
+        style={[
+          styles.trustBanner,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <Text style={styles.trustShield}>🛡️</Text>
+        <Text style={[styles.trustText, { color: colors.textSecondary }]}>
+          Verified Student Network · Safe meetups at campus libraries & quads
+        </Text>
       </View>
 
       {/* Search Bar */}
-      <View style={styles.search}>
-        <Text style={styles.icon}>⌕</Text>
+      <View
+        style={[
+          styles.search,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.icon, { color: colors.muted }]}>⌕</Text>
         <TextInput
           value={query}
           onChangeText={onQueryChange}
           placeholder="Search textbooks, tech, desks..."
-          placeholderTextColor="#87918C"
-          style={styles.input}
+          placeholderTextColor={colors.muted}
+          style={[styles.input, { color: colors.text }]}
         />
         {query.length > 0 && (
           <Pressable onPress={() => onQueryChange("")} style={styles.clearBtn}>
-            <Text style={styles.clearBtnText}>✕</Text>
+            <Text style={[styles.clearBtnText, { color: colors.muted }]}>✕</Text>
           </Pressable>
         )}
       </View>
@@ -108,14 +163,22 @@ export function ExplorePage({
         <Pressable
           style={[
             styles.filterToggleBtn,
-            (showFilterPanel || hasActiveFilters) && styles.filterToggleActive,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            (showFilterPanel || hasActiveFilters) && {
+              backgroundColor: colors.primaryLight,
+              borderColor: colors.primary,
+            },
           ]}
           onPress={() => setShowFilterPanel(!showFilterPanel)}
         >
           <Text
             style={[
               styles.filterToggleText,
-              (showFilterPanel || hasActiveFilters) && styles.filterToggleTextActive,
+              { color: colors.textSecondary },
+              (showFilterPanel || hasActiveFilters) && {
+                color: colors.primary,
+                fontWeight: "800",
+              },
             ]}
           >
             ⚙ Filters & Sort {hasActiveFilters ? "•" : ""}
@@ -123,10 +186,23 @@ export function ExplorePage({
         </Pressable>
 
         <Pressable
-          style={[styles.soldToggleBtn, hideSold && styles.soldToggleBtnActive]}
+          style={[
+            styles.soldToggleBtn,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            hideSold && {
+              backgroundColor: colors.primaryLight,
+              borderColor: colors.primary,
+            },
+          ]}
           onPress={onToggleHideSold}
         >
-          <Text style={[styles.soldToggleText, hideSold && styles.soldToggleTextActive]}>
+          <Text
+            style={[
+              styles.soldToggleText,
+              { color: colors.muted },
+              hideSold && { color: colors.primary, fontWeight: "700" },
+            ]}
+          >
             {hideSold ? "✓ Available only" : "All items (inc. Sold)"}
           </Text>
         </Pressable>
@@ -134,9 +210,16 @@ export function ExplorePage({
 
       {/* Expandable Filter & Sort Drawer */}
       {showFilterPanel && (
-        <View style={styles.drawer}>
+        <View
+          style={[
+            styles.drawer,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.drawerHeader}>
-            <Text style={styles.drawerTitle}>Filters & Sort</Text>
+            <Text style={[styles.drawerTitle, { color: colors.text }]}>
+              Filters & Sort
+            </Text>
             {hasActiveFilters && (
               <Pressable onPress={onResetFilters}>
                 <Text style={styles.resetText}>Reset all</Text>
@@ -145,7 +228,9 @@ export function ExplorePage({
           </View>
 
           {/* Sort By */}
-          <Text style={styles.sublabel}>Sort by:</Text>
+          <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
+            Sort by:
+          </Text>
           <View style={styles.optionRow}>
             {[
               { id: "newest", label: "Newest" },
@@ -156,14 +241,19 @@ export function ExplorePage({
                 key={opt.id}
                 style={[
                   styles.optionPill,
-                  sortBy === opt.id && styles.activeOptionPill,
+                  { backgroundColor: colors.cardSecondary, borderColor: colors.border },
+                  sortBy === opt.id && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                  },
                 ]}
                 onPress={() => onSortByChange(opt.id as SortOption)}
               >
                 <Text
                   style={[
                     styles.optionText,
-                    sortBy === opt.id && styles.activeOptionText,
+                    { color: colors.textSecondary },
+                    sortBy === opt.id && { color: "#FFF", fontWeight: "700" },
                   ]}
                 >
                   {opt.label}
@@ -173,29 +263,45 @@ export function ExplorePage({
           </View>
 
           {/* Price Range */}
-          <Text style={styles.sublabel}>Price Range ($ USD):</Text>
+          <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
+            Price Range ($ USD):
+          </Text>
           <View style={styles.priceRow}>
-            <View style={styles.priceInputWrap}>
-              <Text style={styles.currencyPrefix}>$</Text>
+            <View
+              style={[
+                styles.priceInputWrap,
+                { backgroundColor: colors.inputBg, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.currencyPrefix, { color: colors.muted }]}>
+                $
+              </Text>
               <TextInput
                 value={minPrice}
                 onChangeText={onMinPriceChange}
                 placeholder="Min"
-                placeholderTextColor="#87918C"
+                placeholderTextColor={colors.muted}
                 keyboardType="numeric"
-                style={styles.priceInput}
+                style={[styles.priceInput, { color: colors.text }]}
               />
             </View>
-            <Text style={styles.priceTo}>to</Text>
-            <View style={styles.priceInputWrap}>
-              <Text style={styles.currencyPrefix}>$</Text>
+            <Text style={[styles.priceTo, { color: colors.muted }]}>to</Text>
+            <View
+              style={[
+                styles.priceInputWrap,
+                { backgroundColor: colors.inputBg, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.currencyPrefix, { color: colors.muted }]}>
+                $
+              </Text>
               <TextInput
                 value={maxPrice}
                 onChangeText={onMaxPriceChange}
                 placeholder="Max"
-                placeholderTextColor="#87918C"
+                placeholderTextColor={colors.muted}
                 keyboardType="numeric"
-                style={styles.priceInput}
+                style={[styles.priceInput, { color: colors.text }]}
               />
             </View>
           </View>
@@ -211,7 +317,11 @@ export function ExplorePage({
                 key={qp.label}
                 style={[
                   styles.quickPriceBtn,
-                  maxPrice === qp.max && styles.quickPriceBtnActive,
+                  { backgroundColor: colors.cardSecondary, borderColor: colors.border },
+                  maxPrice === qp.max && {
+                    backgroundColor: colors.primaryLight,
+                    borderColor: colors.primary,
+                  },
                 ]}
                 onPress={() => {
                   onMinPriceChange("");
@@ -221,7 +331,11 @@ export function ExplorePage({
                 <Text
                   style={[
                     styles.quickPriceText,
-                    maxPrice === qp.max && styles.quickPriceTextActive,
+                    { color: colors.textSecondary },
+                    maxPrice === qp.max && {
+                      color: colors.primary,
+                      fontWeight: "700",
+                    },
                   ]}
                 >
                   {qp.label}
@@ -231,7 +345,9 @@ export function ExplorePage({
           </View>
 
           {/* Campus Filter */}
-          <Text style={styles.sublabel}>Campus Meetup Location:</Text>
+          <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
+            Campus Meetup Location:
+          </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -242,14 +358,19 @@ export function ExplorePage({
                 key={camp}
                 style={[
                   styles.optionPill,
-                  campusFilter === camp && styles.activeOptionPill,
+                  { backgroundColor: colors.cardSecondary, borderColor: colors.border },
+                  campusFilter === camp && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                  },
                 ]}
                 onPress={() => onCampusChange(camp)}
               >
                 <Text
                   style={[
                     styles.optionText,
-                    campusFilter === camp && styles.activeOptionText,
+                    { color: colors.textSecondary },
+                    campusFilter === camp && { color: "#FFF", fontWeight: "700" },
                   ]}
                 >
                   {camp}
@@ -260,42 +381,53 @@ export function ExplorePage({
         </View>
       )}
 
-      {/* Categories Scroll */}
+      {/* Categories Scroll with Emojis */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categories}
       >
-        {categories.map((value) => (
-          <Pressable
-            key={value}
-            onPress={() => onCategoryChange(value)}
-            style={[
-              styles.category,
-              category === value && styles.activeCategory,
-            ]}
-          >
-            <Text
+        {categories.map((value) => {
+          const icon = categoryIcons[value] || "🏷️";
+          const isActive = category === value;
+          return (
+            <Pressable
+              key={value}
+              onPress={() => onCategoryChange(value)}
               style={[
-                styles.categoryText,
-                category === value && styles.activeText,
+                styles.category,
+                { backgroundColor: colors.cardSecondary, borderColor: colors.border },
+                isActive && {
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primary,
+                },
               ]}
             >
-              {value}
-            </Text>
-          </Pressable>
-        ))}
+              <Text
+                style={[
+                  styles.categoryText,
+                  { color: colors.textSecondary },
+                  isActive && { color: "#FFF", fontWeight: "700" },
+                ]}
+              >
+                {icon} {value}
+              </Text>
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       {/* Section Header with Item Count */}
       <View style={styles.section}>
         <View>
-          <Text style={styles.sectionTitle}>Browse listings</Text>
-          <Text style={styles.muted}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Browse listings
+          </Text>
+          <Text style={[styles.muted, { color: colors.muted }]}>
             {hasActiveFilters ? "Filtered campus items" : "All campus items"}
           </Text>
         </View>
-        <Text style={styles.seeAll}>
+        <Text style={[styles.seeAll, { color: colors.primary }]}>
           {items.length} {items.length === 1 ? "item" : "items"}
         </Text>
       </View>
@@ -304,42 +436,72 @@ export function ExplorePage({
       {hasActiveFilters && (
         <View style={styles.activeFiltersRow}>
           {category !== "All items" && (
-            <View style={styles.filterChip}>
-              <Text style={styles.filterChipText}>{category}</Text>
+            <View
+              style={[styles.filterChip, { backgroundColor: colors.primaryLight }]}
+            >
+              <Text style={[styles.filterChipText, { color: colors.primary }]}>
+                {category}
+              </Text>
               <Pressable onPress={() => onCategoryChange("All items")}>
-                <Text style={styles.filterChipClose}>×</Text>
+                <Text style={[styles.filterChipClose, { color: colors.primary }]}>
+                  ×
+                </Text>
               </Pressable>
             </View>
           )}
           {campusFilter !== "All campuses" && (
-            <View style={styles.filterChip}>
-              <Text style={styles.filterChipText}>{campusFilter}</Text>
+            <View
+              style={[styles.filterChip, { backgroundColor: colors.primaryLight }]}
+            >
+              <Text style={[styles.filterChipText, { color: colors.primary }]}>
+                {campusFilter}
+              </Text>
               <Pressable onPress={() => onCampusChange("All campuses")}>
-                <Text style={styles.filterChipClose}>×</Text>
+                <Text style={[styles.filterChipClose, { color: colors.primary }]}>
+                  ×
+                </Text>
               </Pressable>
             </View>
           )}
           {maxPrice !== "" && (
-            <View style={styles.filterChip}>
-              <Text style={styles.filterChipText}>≤ ${maxPrice}</Text>
+            <View
+              style={[styles.filterChip, { backgroundColor: colors.primaryLight }]}
+            >
+              <Text style={[styles.filterChipText, { color: colors.primary }]}>
+                ≤ ${maxPrice}
+              </Text>
               <Pressable onPress={() => onMaxPriceChange("")}>
-                <Text style={styles.filterChipClose}>×</Text>
+                <Text style={[styles.filterChipClose, { color: colors.primary }]}>
+                  ×
+                </Text>
               </Pressable>
             </View>
           )}
           {minPrice !== "" && (
-            <View style={styles.filterChip}>
-              <Text style={styles.filterChipText}>≥ ${minPrice}</Text>
+            <View
+              style={[styles.filterChip, { backgroundColor: colors.primaryLight }]}
+            >
+              <Text style={[styles.filterChipText, { color: colors.primary }]}>
+                ≥ ${minPrice}
+              </Text>
               <Pressable onPress={() => onMinPriceChange("")}>
-                <Text style={styles.filterChipClose}>×</Text>
+                <Text style={[styles.filterChipClose, { color: colors.primary }]}>
+                  ×
+                </Text>
               </Pressable>
             </View>
           )}
           {hideSold && (
-            <View style={styles.filterChip}>
-              <Text style={styles.filterChipText}>Available Only</Text>
+            <View
+              style={[styles.filterChip, { backgroundColor: colors.primaryLight }]}
+            >
+              <Text style={[styles.filterChipText, { color: colors.primary }]}>
+                Available Only
+              </Text>
               <Pressable onPress={onToggleHideSold}>
-                <Text style={styles.filterChipClose}>×</Text>
+                <Text style={[styles.filterChipClose, { color: colors.primary }]}>
+                  ×
+                </Text>
               </Pressable>
             </View>
           )}
@@ -357,12 +519,17 @@ export function ExplorePage({
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>🔍</Text>
-            <Text style={styles.emptyTitle}>No matching listings</Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              No matching listings
+            </Text>
+            <Text style={[styles.emptyText, { color: colors.muted }]}>
               We couldn't find anything matching your filters or search term.
             </Text>
             {hasActiveFilters && (
-              <Pressable style={styles.resetBtn} onPress={onResetFilters}>
+              <Pressable
+                style={[styles.resetBtn, { backgroundColor: colors.primary }]}
+                onPress={onResetFilters}
+              >
                 <Text style={styles.resetBtnText}>Clear all filters</Text>
               </Pressable>
             )}
@@ -386,51 +553,79 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "flex-start",
     paddingTop: 28,
-    paddingBottom: 24,
+    paddingBottom: 14,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  themeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  themeBtnIcon: {
+    fontSize: 16,
   },
   eyebrow: {
-    color: "#65766D",
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1.8,
     marginBottom: 8,
   },
   heading: {
-    color: "#173C34",
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: "800",
   },
   avatar: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#D6E5D7",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#B4CDB7",
   },
-  avatarText: { color: "#225347", fontWeight: "800", fontSize: 16 },
+  avatarText: { fontWeight: "800", fontSize: 16 },
+  trustBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    marginBottom: 14,
+    gap: 8,
+  },
+  trustShield: {
+    fontSize: 14,
+  },
+  trustText: {
+    fontSize: 11,
+    fontWeight: "600",
+    flex: 1,
+  },
   search: {
     height: 52,
-    backgroundColor: "#FFF",
     borderRadius: 14,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: "#E6E9E2",
     marginBottom: 12,
   },
-  icon: { color: "#49635A", fontSize: 24, marginRight: 8 },
-  input: { flex: 1, color: "#173C34", fontSize: 14 },
+  icon: { fontSize: 24, marginRight: 8 },
+  input: { flex: 1, fontSize: 14 },
   clearBtn: {
     padding: 6,
   },
   clearBtnText: {
-    color: "#87918C",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -443,49 +638,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#E0E5DD",
-  },
-  filterToggleActive: {
-    backgroundColor: "#E4EDE6",
-    borderColor: "#23775D",
   },
   filterToggleText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#4A5A52",
-  },
-  filterToggleTextActive: {
-    color: "#1F5D4C",
   },
   soldToggleBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#E0E5DD",
-  },
-  soldToggleBtnActive: {
-    backgroundColor: "#E8F0EC",
-    borderColor: "#1F5D4C",
   },
   soldToggleText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#65766D",
-  },
-  soldToggleTextActive: {
-    color: "#1F5D4C",
-    fontWeight: "700",
   },
   drawer: {
-    backgroundColor: "#FFF",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E0E5DD",
     marginBottom: 16,
   },
   drawerHeader: {
@@ -497,7 +669,6 @@ const styles = StyleSheet.create({
   drawerTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#173C34",
   },
   resetText: {
     fontSize: 12,
@@ -507,7 +678,6 @@ const styles = StyleSheet.create({
   sublabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#4A5A52",
     marginTop: 10,
     marginBottom: 6,
   },
@@ -520,22 +690,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: "#F2F5F0",
     borderWidth: 1,
-    borderColor: "#E2E7DE",
-  },
-  activeOptionPill: {
-    backgroundColor: "#1F5D4C",
-    borderColor: "#1F5D4C",
   },
   optionText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#4A5A52",
-  },
-  activeOptionText: {
-    color: "#FFF",
-    fontWeight: "700",
   },
   priceRow: {
     flexDirection: "row",
@@ -546,9 +705,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F7F9F6",
     borderWidth: 1,
-    borderColor: "#E0E5DD",
     borderRadius: 10,
     paddingHorizontal: 10,
     height: 40,
@@ -556,18 +713,15 @@ const styles = StyleSheet.create({
   currencyPrefix: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#65766D",
     marginRight: 4,
   },
   priceInput: {
     flex: 1,
     fontSize: 13,
-    color: "#173C34",
   },
   priceTo: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#87918C",
   },
   quickPriceRow: {
     flexDirection: "row",
@@ -578,49 +732,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: "#F5F7F3",
     borderWidth: 1,
-    borderColor: "#E2E7DE",
-  },
-  quickPriceBtnActive: {
-    backgroundColor: "#E4EDE6",
-    borderColor: "#23775D",
   },
   quickPriceText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#54665D",
-  },
-  quickPriceTextActive: {
-    color: "#1F5D4C",
-    fontWeight: "700",
   },
   categories: { gap: 8, paddingBottom: 14 },
   category: {
-    height: 36,
+    height: 38,
     justifyContent: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: "#ECEFE9",
+    borderWidth: 1,
   },
-  activeCategory: { backgroundColor: "#1F5D4C" },
-  categoryText: { color: "#64736C", fontSize: 12, fontWeight: "700" },
-  activeText: { color: "#FFF" },
+  categoryText: { fontSize: 12, fontWeight: "700" },
   section: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    marginTop: 18,
+    marginTop: 14,
     marginBottom: 12,
   },
   sectionTitle: {
-    color: "#173C34",
     fontSize: 20,
     fontWeight: "800",
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  muted: { color: "#87918C", fontSize: 12 },
-  seeAll: { color: "#23775D", fontWeight: "700", fontSize: 12 },
+  muted: { fontSize: 12 },
+  seeAll: { fontWeight: "700", fontSize: 12 },
   activeFiltersRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -630,7 +770,6 @@ const styles = StyleSheet.create({
   filterChip: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E4EDE6",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -639,12 +778,10 @@ const styles = StyleSheet.create({
   filterChipText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#1F5D4C",
   },
   filterChipClose: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#1F5D4C",
     lineHeight: 14,
   },
   grid: { gap: 14 },
@@ -662,18 +799,15 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#173C34",
     marginBottom: 6,
   },
   emptyText: {
     textAlign: "center",
-    color: "#87918C",
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 16,
   },
   resetBtn: {
-    backgroundColor: "#1F5D4C",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,

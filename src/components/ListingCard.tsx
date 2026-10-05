@@ -1,4 +1,5 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { categoryIcons } from "../data";
 import { Listing } from "../types";
 
 export function ListingCard({
@@ -13,6 +14,7 @@ export function ListingCard({
   onOpen: () => void;
 }) {
   const isSold = Boolean(item.isSold);
+  const icon = categoryIcons[item.category] || "🏷️";
 
   return (
     <Pressable
@@ -30,7 +32,9 @@ export function ListingCard({
           </View>
         )}
         <View style={styles.categoryBadge}>
-          <Text style={styles.categoryBadgeText}>{item.category}</Text>
+          <Text style={styles.categoryBadgeText}>
+            {icon} {item.category}
+          </Text>
         </View>
         <Pressable
           accessibilityLabel={saved ? "Remove saved item" : "Save item"}
@@ -54,9 +58,16 @@ export function ListingCard({
         <Text style={styles.muted} numberOfLines={1}>
           {item.condition} · {item.campus}
         </Text>
-        <Text style={styles.tiny} numberOfLines={1}>
-          Listed by {item.seller}
-        </Text>
+        <View style={styles.bottomMetaRow}>
+          <Text style={styles.tiny} numberOfLines={1}>
+            {item.seller.split("(")[0]}
+          </Text>
+          {item.sellerRating ? (
+            <View style={styles.ratingBadge}>
+              <Text style={styles.ratingText}>⭐️ {item.sellerRating}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );
@@ -105,7 +116,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 8,
     left: 8,
-    backgroundColor: "rgba(23, 60, 52, 0.85)",
+    backgroundColor: "rgba(23, 60, 52, 0.88)",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -153,5 +164,22 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
   },
   muted: { color: "#87918C", fontSize: 11, marginTop: 2 },
-  tiny: { color: "#A0AAA4", fontSize: 10, marginTop: 4 },
+  bottomMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  tiny: { color: "#7A8780", fontSize: 10, flex: 1 },
+  ratingBadge: {
+    backgroundColor: "#F2F5F0",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  ratingText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#2E594B",
+  },
 });
