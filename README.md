@@ -8,11 +8,11 @@ A mobile and web marketplace application built with **React Native**, **Expo SDK
 
 | Member | Assigned Role | Feature Implemented | Key Files Modified |
 | :--- | :--- | :--- | :--- |
-| **Member 1 (Student A)** | Lead / Listing Manager | **Feature 2: Rich Listing Creation & Device Image Upload** | `src/components/SellModal.tsx`, `src/App.tsx` |
-| **Member 2 (Student B)** | Search & Discovery Lead | **Feature 1: Multi-field Search, Price Range & Sorting** | `src/pages/ExplorePage.tsx`, `src/types.ts` |
-| **Member 3 (Student C)** | Inventory & Status Manager | **Feature 3: Listing Status ("Mark as Sold") & Owner Controls** | `src/components/ListingCard.tsx`, `src/pages/MyListingsPage.tsx` |
-| **Member 4 (Student D)** | Real-time Comms Lead | **Feature 4: Interactive Chat & "Make an Offer" Negotiation** | `src/pages/MessagesPage.tsx`, `src/components/OfferModal.tsx` |
-| **Member 5 (Student E)** | UI/UX & Integration Lead | **Feature 5: Student Trust, Safety Reporting & Dark Mode** | `src/components/ReportModal.tsx`, `src/pages/ProfilePage.tsx`, `src/theme.ts` |
+| **Member 1 (Piratheep)** | Lead / Listing Manager | **Feature 2: Rich Listing Creation & Device Image Upload** | `src/components/SellModal.tsx`, `src/App.tsx` |
+| **Member 2 (Mufazzir)** | Search & Discovery Lead | **Feature 1: Multi-field Search, Price Range & Sorting** | `src/pages/ExplorePage.tsx`, `src/types.ts` |
+| **Member 3 (Chamodya)** | Inventory & Status Manager | **Feature 3: Listing Status ("Mark as Sold") & Owner Controls** | `src/components/ListingCard.tsx`, `src/pages/MyListingsPage.tsx` |
+| **Member 4 (Poojani)** | Real-time Comms Lead | **Feature 4: Interactive Chat & "Make an Offer" Negotiation** | `src/pages/MessagesPage.tsx`, `src/components/OfferModal.tsx` |
+| **Member 5 (Saad)** | UI/UX & Integration Lead | **Feature 5: Student Trust, Safety Reporting & Dark Mode** | `src/components/ReportModal.tsx`, `src/pages/ProfilePage.tsx`, `src/theme.ts` |
 
 ---
 
