@@ -94,23 +94,6 @@ A mobile and web marketplace application built with **React Native**, **Expo SDK
    ```
    Scan the terminal QR code with the **Expo Go** app on iOS or Android.
 
----
-
-## 📹 Video Demonstration Script (5 to 8 Minutes)
-
-| Time | Section | Speaker | Action & Talking Points |
-| :--- | :--- | :--- | :--- |
-| **0:00 - 1:00** | **1. Introduction** | All Members | Introduce team members, roles, project name, and problem (reducing waste, affordable textbooks, safe campus meetups). |
-| **1:00 - 1:45** | **2. Technical Overview** | Member 5 | Briefly explain architecture: React Native, Expo 57, TypeScript, state management, Dark Mode, and GitHub branch strategy. |
-| **1:45 - 2:45** | **3. Listing Creation & Validation** | Member 1 | **Demo Action:** Tap `+ Sell`. Try submitting empty form to showcase validation errors. Choose category, upload/select photo, fill in "Calculus 9th Edition", price `$35`. Hit "Publish". Show the listing appear on Explore. |
-| **2:45 - 3:45** | **4. Search, Price Filter & Sorting** | Member 2 | **Demo Action:** Type "Calculus" in the search bar. Open "Filters & Sort". Set Max Price to `$50`, sort by *Price: Low to High*. Point out the active filter chips and item count. |
-| **3:45 - 4:45** | **5. Offer Negotiation & Chat** | Member 4 | **Demo Action:** Student B opens the listing, taps `🤝 Offer`, offers `$30` (Save 14%). Goes to chat: show the interactive offer card. Switch demo role to Seller (Maya) and click **[✓ Accept Offer]**. Show the confirmation message! |
-| **4:45 - 5:30** | **6. Mark as Sold & Dashboard** | Member 3 | **Demo Action:** Student A goes to "My Items", taps `Mark as Sold`. Show the bold red **SOLD** badge appear. Show total campus earnings increase on Profile dashboard. |
-| **5:30 - 6:15** | **7. Campus Safety & Dark Mode** | Member 5 | **Demo Action:** Tap `🌙` to show Dark Mode. Open an item and tap `🚩 Flag or Report this listing` to show the safety reporting modal. |
-| **6:15 - 7:00** | **8. GitHub Collaboration** | Member 5 | **Demo Action:** Screen-share GitHub repository. Show closed Pull Requests, commit history by each member, and clean documentation. |
-| **7:00 - 7:30** | **9. Conclusion** | All Members | Summarize key learnings, challenges resolved (e.g. mobile responsiveness, offline demo capability), and concluding remarks. |
-
----
 
 ## 🌿 Git Collaboration & Branching Strategy
 
