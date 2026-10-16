@@ -1,8 +1,10 @@
 //Member: Piratheep
+//Feacture: search & Filtering - Implemented by Mufazzir
 import { useState } from "react";
 import {
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +12,13 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { campuses, categories, conditions, samplePhotoPresets } from "../data";
+import {
+  campuses,
+  categories,
+  categoryIcons,
+  conditions,
+  samplePhotoPresets,
+} from "../data";
 
 export function SellModal({
   visible,
@@ -43,6 +51,30 @@ export function SellModal({
     setImage(url);
   };
 
+  const handleDeviceUpload = () => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = "image/*";
+      fileInput.onchange = (event: any) => {
+        const file = event.target?.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (loadEvt) => {
+            if (loadEvt.target?.result) {
+              setImage(loadEvt.target.result as string);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      fileInput.click();
+    } else {
+      // Fallback preset
+      setImage(samplePhotoPresets[1].url);
+    }
+  };
+
   const validate = (): boolean => {
     const errs: string[] = [];
     if (!title.trim() || title.trim().length < 3) {
@@ -53,7 +85,7 @@ export function SellModal({
       errs.push("Please enter a valid price greater than $0.");
     }
     if (!image.trim()) {
-      errs.push("Please choose an image preset or enter an image URL.");
+      errs.push("Please choose an image preset, upload a photo, or enter an image URL.");
     }
     setErrors(errs);
     return errs.length === 0;
@@ -166,7 +198,7 @@ export function SellModal({
                         category === cat && styles.activeChipText,
                       ]}
                     >
-                      {cat}
+                      {categoryIcons[cat] || "🏷️"} {cat}
                     </Text>
                   </Pressable>
                 ))}
@@ -211,15 +243,24 @@ export function SellModal({
                       campus === camp && styles.activeChipText,
                     ]}
                   >
-                    {camp}
+                    📍 {camp}
                   </Text>
                 </Pressable>
               ))}
             </View>
 
-            {/* Photo Presets & URL */}
+            {/* Photo Upload & Presets */}
             <Text style={styles.label}>Item photo</Text>
-            <Text style={styles.hint}>Choose a quick sample photo or enter a URL:</Text>
+            
+            {/* Upload Button */}
+            <View style={styles.uploadRow}>
+              <Pressable style={styles.uploadBtn} onPress={handleDeviceUpload}>
+                <Text style={styles.uploadBtnIcon}>📁</Text>
+                <Text style={styles.uploadBtnText}>Upload from Computer / Device</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.hint}>Or select a quick sample preset photo:</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -239,6 +280,14 @@ export function SellModal({
                 </Pressable>
               ))}
             </ScrollView>
+
+            {/* Image Preview */}
+            {image ? (
+              <View style={styles.previewBox}>
+                <Text style={styles.previewLabel}>Selected Photo Preview:</Text>
+                <Image source={{ uri: image }} style={styles.previewThumb} />
+              </View>
+            ) : null}
 
             <TextInput
               value={image}
@@ -341,6 +390,52 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#87918C",
     marginBottom: 6,
+    marginTop: 8,
+  },
+  uploadRow: {
+    marginBottom: 6,
+  },
+  uploadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E4EDE6",
+    borderWidth: 1,
+    borderColor: "#B4CDB7",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  uploadBtnIcon: {
+    fontSize: 16,
+  },
+  uploadBtnText: {
+    color: "#1F5D4C",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  previewBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F7F9F6",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E0E5DD",
+    marginTop: 8,
+    gap: 12,
+  },
+  previewLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#54665D",
+  },
+  previewThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: "#E5ECE5",
   },
   field: {
     backgroundColor: "#F7F9F6",

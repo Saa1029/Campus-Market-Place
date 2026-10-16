@@ -32,18 +32,35 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { EmptyState } from "./components/EmptyState";
+import { OfferModal } from "./components/OfferModal";
+import { ReportModal } from "./components/ReportModal";
+import { SellModal } from "./components/SellModal";
+import {
+  categoryIcons,
+  demoUsers,
+  seedConversations,
+  seedListings,
+  seedMessages,
+} from "./data";
+import { auth, db, firebaseConfigured } from "./firebase";
 import { ExplorePage } from "./pages/ExplorePage";
 import { MessagesPage } from "./pages/MessagesPage";
 import { MyListingsPage } from "./pages/MyListingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SavedPage } from "./pages/SavedPage";
-import { seedListings } from "./data";
-import { auth, db, firebaseConfigured } from "./firebase";
-import { Listing, Tab } from "./types";
+import { themeColors } from "./theme";
+import {
+  Conversation,
+  DemoUser,
+  Listing,
+  Message,
+  Offer,
+  SortOption,
+  Tab,
+  ThemeMode,
+} from "./types";
 
 async function registerUser(user: User) {
   if (!db) return;
@@ -64,23 +81,52 @@ async function registerUser(user: User) {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("Explore");
-  const [items, setItems] = useState(seedListings);
+  const [items, setItems] = useState<Listing[]>(seedListings);
+
+  // Theme state (Dark / Light mode)
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const colors = themeColors[themeMode];
+
+  // Search & Filter state (Feature 1)
   const [queryText, setQueryText] = useState("");
   const [category, setCategory] = useState("All items");
-  const [savedIds, setSavedIds] = useState<string[]>([]);
-  const [selected, setSelected] = useState<Listing | null>(null);
+  const [campusFilter, setCampusFilter] = useState("All campuses");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [hideSold, setHideSold] = useState(false);
+
+  // User & Demo Team Switcher state (Feature 5)
+  const [currentDemoUser, setCurrentDemoUser] = useState<DemoUser>(demoUsers[0]);
   const [user, setUser] = useState<User | null>(auth?.currentUser || null);
   const [authOpen, setAuthOpen] = useState(false);
-  const [sellOpen, setSellOpen] = useState(false);
   const [authError, setAuthError] = useState("");
   const [profileReady, setProfileReady] = useState(false);
 
+  // Listing creation, detail, offer & report state
+  const [sellOpen, setSellOpen] = useState(false);
+  const [savedIds, setSavedIds] = useState<string[]>(["1"]);
+  const [selected, setSelected] = useState<Listing | null>(null);
+  const [offerModalOpen, setOfferModalOpen] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+
+  // Messaging state (Feature 4)
+  const [conversations, setConversations] = useState<Conversation[]>(
+    seedConversations,
+  );
+  const [messages, setMessages] =
+    useState<Record<string, Message[]>>(seedMessages);
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | null
+  >(null);
+
+  // Firebase auth sync
   useEffect(() => {
     const firebaseAuth = auth;
     if (!firebaseAuth) return;
     const handleUser = (nextUser: User | null) => {
       setUser(nextUser);
-      if (nextUser)
+      if (nextUser) {
         registerUser(nextUser)
           .then(() => setProfileReady(true))
           .catch((error) =>
@@ -90,7 +136,9 @@ export default function App() {
                 : "Could not create profile.",
             ),
           );
-      else setProfileReady(false);
+      } else {
+        setProfileReady(false);
+      }
     };
     let unsubscribe: () => void = () => undefined;
     setPersistence(firebaseAuth, browserLocalPersistence)
@@ -111,6 +159,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Firebase Firestore real-time sync (if configured)
   useEffect(() => {
     if (!db) return;
     const listingsQuery = query(
@@ -119,37 +168,421 @@ export default function App() {
     );
     return onSnapshot(
       listingsQuery,
-      (snapshot) =>
-        setItems(
-          snapshot.empty
-            ? seedListings
-            : snapshot.docs.map(
-                (entry) => ({ id: entry.id, ...entry.data() }) as Listing,
-              ),
-        ),
-      () => setItems(seedListings),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const remoteItems = snapshot.docs.map(
+            (entry) => ({ id: entry.id, ...entry.data() }) as Listing,
+          );
+          setItems(remoteItems);
+        }
+      },
+      (err) => console.log("Firestore offline/fallback active:", err.message),
     );
   }, []);
 
-  const filteredItems = useMemo(
+  // Filtered & Sorted items calculation
+  const filteredItems = useMemo(() => {
+    let result = items.filter((item) => {
+      if (category !== "All items" && item.category !== category) return false;
+      if (campusFilter !== "All campuses" && item.campus !== campusFilter)
+        return false;
+      if (hideSold && item.isSold) return false;
+
+      const numPrice = item.price;
+      if (minPrice !== "" && numPrice < Number(minPrice)) return false;
+      if (maxPrice !== "" && numPrice > Number(maxPrice)) return false;
+
+      if (queryText.trim() !== "") {
+        const q = queryText.toLowerCase();
+        const inTitle = item.title.toLowerCase().includes(q);
+        const inDesc = item.description?.toLowerCase().includes(q) || false;
+        const inCat = item.category.toLowerCase().includes(q);
+        const inCampus = item.campus.toLowerCase().includes(q);
+        if (!inTitle && !inDesc && !inCat && !inCampus) return false;
+      }
+      return true;
+    });
+
+    if (sortBy === "price-asc") {
+      result = [...result].sort((a, b) => a.price - b.price);
+    } else if (sortBy === "price-desc") {
+      result = [...result].sort((a, b) => b.price - a.price);
+    } else {
+      result = [...result].sort((a, b) => {
+        const tA = typeof a.createdAt === "number" ? a.createdAt : 0;
+        const tB = typeof b.createdAt === "number" ? b.createdAt : 0;
+        return tB - tA;
+      });
+    }
+
+    return result;
+  }, [
+    items,
+    category,
+    campusFilter,
+    hideSold,
+    minPrice,
+    maxPrice,
+    queryText,
+    sortBy,
+  ]);
+
+  const handleResetFilters = () => {
+    setQueryText("");
+    setCategory("All items");
+    setCampusFilter("All campuses");
+    setMinPrice("");
+    setMaxPrice("");
+    setSortBy("newest");
+    setHideSold(false);
+  };
+
+  const handleToggleTheme = () => {
+    setThemeMode((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
+  // Active user identity for demo / Firebase
+  const activeUserId = user ? user.uid : currentDemoUser.uid;
+  const activeUserName = user
+    ? user.displayName || user.email || "Campus Student"
+    : currentDemoUser.displayName;
+
+  // My Listings calculations
+  const myListings = useMemo(() => {
+    return items.filter(
+      (item) => item.sellerId === activeUserId || item.seller === activeUserName,
+    );
+  }, [items, activeUserId, activeUserName]);
+
+  const soldCount = useMemo(
+    () => myListings.filter((i) => i.isSold).length,
+    [myListings],
+  );
+
+  const totalEarnings = useMemo(
     () =>
-      items.filter(
-        (item) =>
-          (category === "All items" || item.category === category) &&
-          item.title.toLowerCase().includes(queryText.toLowerCase()),
-      ),
-    [category, items, queryText],
+      myListings
+        .filter((i) => i.isSold)
+        .reduce((sum, item) => sum + item.price, 0),
+    [myListings],
   );
-  const myListings = useMemo(
-    () => (user ? items.filter((item) => item.sellerId === user.uid) : []),
-    [items, user],
-  );
-  const toggleSaved = (id: string) =>
+
+  // Toggle Favorite
+  const toggleSaved = (id: string) => {
     setSavedIds((current) =>
       current.includes(id)
-        ? current.filter((value) => value !== id)
+        ? current.filter((val) => val !== id)
         : [...current, id],
     );
+  };
+
+  // Toggle Sold Status
+  const handleToggleSold = (listingId: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === listingId ? { ...item, isSold: !item.isSold } : item,
+      ),
+    );
+    if (selected && selected.id === listingId) {
+      setSelected((prev) => (prev ? { ...prev, isSold: !prev.isSold } : null));
+    }
+  };
+
+  // Delete Listing
+  const handleDeleteListing = (listingId: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== listingId));
+    setSavedIds((prev) => prev.filter((id) => id !== listingId));
+    if (selected?.id === listingId) {
+      setSelected(null);
+    }
+  };
+
+  // Publish Listing
+  const handlePublish = async (listingData: {
+    title: string;
+    price: string;
+    category: string;
+    condition: string;
+    campus: string;
+    image: string;
+    description: string;
+  }) => {
+    const newListing: Listing = {
+      id: `list-${Date.now()}`,
+      title: listingData.title,
+      price: Number(listingData.price),
+      category: listingData.category,
+      condition: listingData.condition,
+      campus: listingData.campus,
+      image: listingData.image,
+      description: listingData.description,
+      seller: activeUserName,
+      sellerId: activeUserId,
+      sellerMajor: currentDemoUser.major?.split(" ")[0] || "Student",
+      sellerGradYear: currentDemoUser.gradYear?.replace("Class of ", "") || "'26",
+      sellerRating: 5.0,
+      meetupsCount: 1,
+      isSold: false,
+      createdAt: Date.now(),
+    };
+
+    setItems((prev) => [newListing, ...prev]);
+
+    if (db) {
+      try {
+        await addDoc(collection(db, "listings"), {
+          ...newListing,
+          createdAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.warn("Firestore sync skipped:", err);
+      }
+    }
+
+    setSellOpen(false);
+    setTab("Explore");
+  };
+
+  // Contact Seller
+  const handleContactSeller = (listing: Listing) => {
+    let conv = conversations.find(
+      (c) => c.listingId === listing.id && c.buyerId === activeUserId,
+    );
+
+    if (!conv) {
+      const newConvId = `conv-${Date.now()}`;
+      conv = {
+        id: newConvId,
+        listingId: listing.id,
+        listingTitle: listing.title,
+        listingPrice: listing.price,
+        listingImage: listing.image,
+        buyerId: activeUserId,
+        buyerName: activeUserName,
+        sellerId: listing.sellerId || "student-seller",
+        sellerName: listing.seller,
+        lastMessage: "Is this still available?",
+        lastMessageTime: "Just now",
+        unreadCount: 0,
+      };
+
+      setConversations((prev) => [conv!, ...prev]);
+      setMessages((prev) => ({
+        ...prev,
+        [newConvId]: [
+          {
+            id: `msg-${Date.now()}`,
+            conversationId: newConvId,
+            senderId: activeUserId,
+            senderName: activeUserName,
+            text: `Hi ${listing.seller}! Is your "${listing.title}" still available?`,
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            type: "text",
+          },
+        ],
+      }));
+    }
+
+    setSelected(null);
+    setActiveConversationId(conv.id);
+    setTab("Messages");
+  };
+
+  // Submit Offer
+  const handleSubmitOffer = (amount: number) => {
+    if (!selected) return;
+
+    const targetListing = selected;
+    let conv = conversations.find(
+      (c) => c.listingId === targetListing.id && c.buyerId === activeUserId,
+    );
+
+    const newOffer: Offer = {
+      id: `offer-${Date.now()}`,
+      amount,
+      originalPrice: targetListing.price,
+      status: "pending",
+      buyerId: activeUserId,
+      buyerName: activeUserName,
+      createdAt: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+
+    const convId = conv ? conv.id : `conv-${Date.now()}`;
+
+    if (!conv) {
+      conv = {
+        id: convId,
+        listingId: targetListing.id,
+        listingTitle: targetListing.title,
+        listingPrice: targetListing.price,
+        listingImage: targetListing.image,
+        buyerId: activeUserId,
+        buyerName: activeUserName,
+        sellerId: targetListing.sellerId || "student-seller",
+        sellerName: targetListing.seller,
+        lastMessage: `Offered $${amount}`,
+        lastMessageTime: "Just now",
+        activeOffer: newOffer,
+      };
+      setConversations((prev) => [conv!, ...prev]);
+    } else {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === convId
+            ? {
+                ...c,
+                lastMessage: `Offered $${amount}`,
+                lastMessageTime: "Just now",
+                activeOffer: newOffer,
+              }
+            : c,
+        ),
+      );
+    }
+
+    const offerMsg: Message = {
+      id: `msg-offer-${Date.now()}`,
+      conversationId: convId,
+      senderId: activeUserId,
+      senderName: activeUserName,
+      text: `${activeUserName} offered $${amount} for ${targetListing.title}`,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      type: "offer",
+      offer: newOffer,
+    };
+
+    setMessages((prev) => ({
+      ...prev,
+      [convId]: [...(prev[convId] || []), offerMsg],
+    }));
+
+    setSelected(null);
+    setActiveConversationId(convId);
+    setTab("Messages");
+  };
+
+  // Respond to Offer (Accept / Decline)
+  const handleRespondOffer = (
+    convId: string,
+    offerId: string,
+    accepted: boolean,
+  ) => {
+    const timeStr = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    // Update messages offer status
+    setMessages((prev) => {
+      const list = prev[convId] || [];
+      const updated = list.map((m) =>
+        m.offer && m.offer.id === offerId
+          ? {
+              ...m,
+              offer: {
+                ...m.offer,
+                status: (accepted ? "accepted" : "declined") as
+                  | "accepted"
+                  | "declined",
+              },
+            }
+          : m,
+      );
+
+      const statusMsg: Message = {
+        id: `msg-status-${Date.now()}`,
+        conversationId: convId,
+        senderId: activeUserId,
+        senderName: activeUserName,
+        text: accepted
+          ? `✓ Offer accepted! Let's arrange a campus meetup spot.`
+          : `Offer was declined.`,
+        timestamp: timeStr,
+        type: "text",
+      };
+
+      return { ...prev, [convId]: [...updated, statusMsg] };
+    });
+
+    // Update conversation state
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === convId && c.activeOffer
+          ? {
+              ...c,
+              activeOffer: {
+                ...c.activeOffer,
+                status: (accepted ? "accepted" : "declined") as
+                  | "accepted"
+                  | "declined",
+              },
+              lastMessage: accepted
+                ? `Offer of $${c.activeOffer.amount} accepted!`
+                : `Offer declined.`,
+              lastMessageTime: "Just now",
+            }
+          : c,
+      ),
+    );
+  };
+
+  // Send a message inside chat
+  const handleSendMessage = (
+    convId: string,
+    text: string,
+    senderId: string,
+    senderName: string,
+  ) => {
+    const timeStr = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const newMsg: Message = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      conversationId: convId,
+      senderId,
+      senderName,
+      text,
+      timestamp: timeStr,
+      type: "text",
+    };
+
+    setMessages((prev) => ({
+      ...prev,
+      [convId]: [...(prev[convId] || []), newMsg],
+    }));
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === convId
+          ? {
+              ...c,
+              lastMessage: text,
+              lastMessageTime: "Just now",
+            }
+          : c,
+      ),
+    );
+  };
+
+  // Submit Safety Report
+  const handleSubmitReport = (reason: string, details: string) => {
+    if (!selected) return;
+    setItems((prev) =>
+      prev.map((i) => (i.id === selected.id ? { ...i, isReported: true } : i)),
+    );
+  };
+
   const signInWithGoogle = async () => {
     if (!auth) return;
     setAuthError("");
@@ -179,55 +612,43 @@ export default function App() {
       Alert.alert("Google sign-in failed", code);
     }
   };
-  const publish = async (
-    title: string,
-    price: string,
-    listingCategory: string,
-  ) => {
-    if (!user) {
-      setSellOpen(false);
-      setAuthOpen(true);
-      return;
-    }
-    await addDoc(collection(db!, "listings"), {
-      title,
-      price: Number(price),
-      category: listingCategory,
-      seller: user.displayName || user.email || "You",
-      sellerId: user.uid,
-      campus: "North Campus",
-      condition: "Good condition",
-      image: seedListings[0].image,
-      description: "New listing from a campus seller.",
-      createdAt: serverTimestamp(),
-    });
-    setSellOpen(false);
-  };
-  const contactSeller = () => {
-    if (!user) {
-      setAuthOpen(true);
-      return;
-    }
-    setSelected(null);
-    setTab("Messages");
-  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
+      <StatusBar style={themeMode === "dark" ? "light" : "dark"} />
+
+      {/* Main Pages */}
       {tab === "Explore" && (
         <ExplorePage
           items={filteredItems}
           query={queryText}
           category={category}
+          campusFilter={campusFilter}
+          minPrice={minPrice}
+          maxPrice={maxPrice}
+          sortBy={sortBy}
+          hideSold={hideSold}
           savedIds={savedIds}
+          currentUserName={activeUserName}
+          currentUserAvatar={currentDemoUser.photoURL}
+          themeMode={themeMode}
+          onToggleTheme={handleToggleTheme}
           onQueryChange={setQueryText}
           onCategoryChange={setCategory}
+          onCampusChange={setCampusFilter}
+          onMinPriceChange={setMinPrice}
+          onMaxPriceChange={setMaxPrice}
+          onSortByChange={setSortBy}
+          onToggleHideSold={() => setHideSold(!hideSold)}
+          onResetFilters={handleResetFilters}
           onSave={toggleSaved}
           onOpen={setSelected}
           onProfile={() => setTab("Profile")}
         />
       )}
+
       {tab === "Saved" && (
         <SavedPage
           items={items.filter((item) => savedIds.includes(item.id))}
@@ -235,52 +656,109 @@ export default function App() {
           onOpen={setSelected}
         />
       )}
+
       {tab === "Messages" && (
-        <MessagesPage onBrowse={() => setTab("Explore")} />
+        <MessagesPage
+          conversations={conversations}
+          messages={messages}
+          currentUserId={activeUserId}
+          currentUserName={activeUserName}
+          activeConversationId={activeConversationId}
+          onSelectConversation={(id) => setActiveConversationId(id)}
+          onBackToList={() => setActiveConversationId(null)}
+          onSendMessage={handleSendMessage}
+          onRespondOffer={handleRespondOffer}
+          onBrowse={() => setTab("Explore")}
+          onOpenListing={(listingId) => {
+            const itm = items.find((i) => i.id === listingId);
+            if (itm) setSelected(itm);
+          }}
+        />
       )}
+
       {tab === "MyListings" && (
         <MyListingsPage
           items={myListings}
           onOpen={setSelected}
           onSell={() => setSellOpen(true)}
+          onToggleSold={handleToggleSold}
+          onDeleteListing={handleDeleteListing}
         />
       )}
+
       {tab === "Profile" && (
         <ProfilePage
           user={user}
+          currentDemoUser={currentDemoUser}
           savedCount={savedIds.length}
-          listingCount={myListings.length}
+          listingCount={myListings.filter((i) => !i.isSold).length}
+          soldCount={soldCount}
+          totalEarnings={totalEarnings}
           firebaseConfigured={firebaseConfigured}
           profileReady={profileReady}
           error={authError}
-          onMyListings={() => (user ? setTab("MyListings") : setAuthOpen(true))}
+          themeMode={themeMode}
+          onToggleTheme={handleToggleTheme}
+          onSelectDemoUser={(dUser) => setCurrentDemoUser(dUser)}
+          onMyListings={() => setTab("MyListings")}
           onSaved={() => setTab("Saved")}
           onSignIn={() => setAuthOpen(true)}
           onSignOut={() => auth && signOut(auth)}
         />
       )}
+
+      {/* Bottom Navigation */}
       <BottomNav
         tab={tab}
         savedCount={savedIds.length}
+        messageCount={conversations.length}
+        themeMode={themeMode}
         onChange={setTab}
         onSell={() => setSellOpen(true)}
       />
+
+      {/* Listing Detail Modal */}
       <ListingModal
         item={selected}
-        user={user}
+        currentUserId={activeUserId}
+        themeMode={themeMode}
         onClose={() => setSelected(null)}
-        onContact={contactSeller}
+        onContact={() => selected && handleContactSeller(selected)}
+        onMakeOffer={() => setOfferModalOpen(true)}
+        onReport={() => setReportModalOpen(true)}
+        onToggleSold={() => selected && handleToggleSold(selected.id)}
+        onDelete={() => selected && handleDeleteListing(selected.id)}
       />
+
+      {/* Make an Offer Modal */}
+      <OfferModal
+        visible={offerModalOpen}
+        listing={selected}
+        onClose={() => setOfferModalOpen(false)}
+        onSubmitOffer={handleSubmitOffer}
+      />
+
+      {/* Report Listing Safety Modal */}
+      <ReportModal
+        visible={reportModalOpen}
+        listing={selected}
+        onClose={() => setReportModalOpen(false)}
+        onSubmitReport={handleSubmitReport}
+      />
+
+      {/* Sell Modal */}
+      <SellModal
+        visible={sellOpen}
+        onClose={() => setSellOpen(false)}
+        onSubmit={handlePublish}
+      />
+
+      {/* Auth Modal */}
       <AuthModal
         visible={authOpen}
         onClose={() => setAuthOpen(false)}
         onSignIn={signInWithGoogle}
         error={authError}
-      />
-      <SellModal
-        visible={sellOpen}
-        onClose={() => setSellOpen(false)}
-        onSubmit={publish}
       />
     </SafeAreaView>
   );
@@ -289,80 +767,144 @@ export default function App() {
 function BottomNav({
   tab,
   savedCount,
+  messageCount,
+  themeMode,
   onChange,
   onSell,
 }: {
   tab: Tab;
   savedCount: number;
+  messageCount: number;
+  themeMode: ThemeMode;
   onChange: (tab: Tab) => void;
   onSell: () => void;
 }) {
+  const colors = themeColors[themeMode];
+
   return (
-    <View style={styles.nav}>
+    <View
+      style={[
+        styles.nav,
+        { backgroundColor: colors.navBg, borderTopColor: colors.navBorder },
+      ]}
+    >
       <NavItem
         label="Explore"
         icon="⌂"
         active={tab === "Explore"}
+        themeMode={themeMode}
         onPress={() => onChange("Explore")}
       />
       <NavItem
         label="Saved"
         icon="♡"
         active={tab === "Saved"}
-        badge={savedCount}
+        badge={savedCount > 0 ? savedCount : undefined}
+        themeMode={themeMode}
         onPress={() => onChange("Saved")}
       />
       <NavItem
         label="Messages"
-        icon="□"
+        icon="💬"
         active={tab === "Messages"}
+        badge={messageCount > 0 ? messageCount : undefined}
+        themeMode={themeMode}
         onPress={() => onChange("Messages")}
       />
-      <Pressable style={styles.sellButton} onPress={onSell}>
+      <NavItem
+        label="My Items"
+        icon="🏷"
+        active={tab === "MyListings"}
+        themeMode={themeMode}
+        onPress={() => onChange("MyListings")}
+      />
+      <Pressable
+        style={[styles.sellButton, { backgroundColor: colors.primary }]}
+        onPress={onSell}
+      >
         <Text style={styles.sellPlus}>＋</Text>
         <Text style={styles.sellText}>Sell</Text>
       </Pressable>
     </View>
   );
 }
+
 function NavItem({
   label,
   icon,
   active,
   badge,
+  themeMode,
   onPress,
 }: {
   label: string;
   icon: string;
   active: boolean;
   badge?: number;
+  themeMode: ThemeMode;
   onPress: () => void;
 }) {
+  const colors = themeColors[themeMode];
+
   return (
     <Pressable style={styles.navItem} onPress={onPress}>
       <View>
-        <Text style={[styles.navIcon, active && styles.navActive]}>{icon}</Text>
+        <Text
+          style={[
+            styles.navIcon,
+            { color: colors.muted },
+            active && { color: colors.primary },
+          ]}
+        >
+          {icon}
+        </Text>
         {badge ? (
-          <View style={styles.badge}>
+          <View style={[styles.badge, { backgroundColor: colors.danger }]}>
             <Text style={styles.badgeText}>{badge}</Text>
           </View>
         ) : null}
       </View>
-      <Text style={[styles.navLabel, active && styles.navActive]}>{label}</Text>
+      <Text
+        style={[
+          styles.navLabel,
+          { color: colors.muted },
+          active && { color: colors.primary },
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
+
 function ListingModal({
   item,
-  user,
+  currentUserId,
+  themeMode,
   onClose,
   onContact,
+  onMakeOffer,
+  onReport,
+  onToggleSold,
+  onDelete,
 }: {
   item: Listing | null;
-  user: User | null;
+  currentUserId: string;
+  themeMode: ThemeMode;
   onClose: () => void;
   onContact: () => void;
+  onMakeOffer: () => void;
+  onReport: () => void;
+  onToggleSold: () => void;
+  onDelete: () => void;
 }) {
+  if (!item) return null;
+
+  const colors = themeColors[themeMode];
+  const isOwner = item.sellerId === currentUserId;
+  const isSold = Boolean(item.isSold);
+  const icon = categoryIcons[item.category] || "🏷️";
+
   return (
     <Modal
       visible={item !== null}
@@ -370,37 +912,223 @@ function ListingModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      {item && (
-        <View style={styles.backdrop}>
-          <View style={styles.detail}>
-            <Image source={{ uri: item.image }} style={styles.detailImage} />
-            <Pressable style={styles.close} onPress={onClose}>
-              <Text style={styles.closeText}>×</Text>
-            </Pressable>
-            <View style={styles.detailBody}>
-              <Text style={styles.detailCategory}>
-                {item.category.toUpperCase()}
-              </Text>
-              <Text style={styles.detailTitle}>{item.title}</Text>
-              <Text style={styles.detailPrice}>${item.price}</Text>
-              <Text style={styles.muted}>
-                {item.condition} · {item.campus} · {item.seller}
-              </Text>
-              <Text style={styles.description}>{item.description}</Text>
-              <Pressable style={styles.primary} onPress={onContact}>
-                <Text style={styles.primaryText}>
-                  {user
-                    ? `Message ${item.seller}`
-                    : "Sign in to contact seller"}
+      <View style={styles.backdrop}>
+        <View style={[styles.detail, { backgroundColor: colors.card }]}>
+          <Image source={{ uri: item.image }} style={styles.detailImage} />
+          <Pressable style={styles.close} onPress={onClose}>
+            <Text style={styles.closeText}>×</Text>
+          </Pressable>
+
+          <ScrollView style={styles.detailBody} showsVerticalScrollIndicator={false}>
+            {/* Category and Condition Badges */}
+            <View style={styles.badgeRow}>
+              <View
+                style={[
+                  styles.detailCategoryPill,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                <Text style={styles.detailCategory}>
+                  {icon} {item.category.toUpperCase()}
                 </Text>
-              </Pressable>
+              </View>
+              <View
+                style={[
+                  styles.conditionPill,
+                  { backgroundColor: colors.cardSecondary },
+                ]}
+              >
+                <Text style={[styles.conditionText, { color: colors.primary }]}>
+                  {item.condition}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.campusPill,
+                  { backgroundColor: colors.cardSecondary },
+                ]}
+              >
+                <Text
+                  style={[styles.campusText, { color: colors.textSecondary }]}
+                >
+                  📍 {item.campus}
+                </Text>
+              </View>
             </View>
-          </View>
+
+            {/* Sold Banner if Item is Sold */}
+            {isSold && (
+              <View
+                style={[
+                  styles.soldBanner,
+                  {
+                    backgroundColor: colors.dangerLight,
+                    borderColor: colors.danger,
+                  },
+                ]}
+              >
+                <Text style={[styles.soldBannerTitle, { color: colors.danger }]}>
+                  ⚠️ ITEM MARKED AS SOLD
+                </Text>
+                <Text style={[styles.soldBannerDesc, { color: colors.danger }]}>
+                  This item has already found a buyer on campus.
+                </Text>
+              </View>
+            )}
+
+            <Text
+              style={[
+                styles.detailTitle,
+                { color: colors.text },
+                isSold && styles.titleSold,
+              ]}
+            >
+              {item.title}
+            </Text>
+            <Text
+              style={[
+                styles.detailPrice,
+                { color: colors.accent },
+                isSold && styles.priceSold,
+              ]}
+            >
+              ${item.price}
+            </Text>
+
+            {/* Seller Student Profile Card */}
+            <View
+              style={[
+                styles.sellerProfileBox,
+                {
+                  backgroundColor: colors.cardSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={styles.sellerHeader}>
+                <View>
+                  <Text style={[styles.sellerName, { color: colors.text }]}>
+                    {item.seller}
+                  </Text>
+                  <Text style={[styles.sellerMajor, { color: colors.muted }]}>
+                    🎓 {item.sellerMajor || "Student"} · Class of{" "}
+                    {item.sellerGradYear || "'26"}
+                  </Text>
+                </View>
+                {item.sellerRating ? (
+                  <View style={styles.sellerRatingBox}>
+                    <Text style={styles.sellerRatingValue}>
+                      ⭐️ {item.sellerRating}
+                    </Text>
+                    <Text style={styles.sellerMeetups}>
+                      {item.meetupsCount || 10} meetups
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
+            <Text style={[styles.descHeading, { color: colors.text }]}>
+              Description & Campus Meetup
+            </Text>
+            <Text
+              style={[styles.description, { color: colors.textSecondary }]}
+            >
+              {item.description}
+            </Text>
+
+            {/* Owner Management Controls */}
+            {isOwner && (
+              <View
+                style={[
+                  styles.ownerControls,
+                  {
+                    backgroundColor: colors.cardSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.ownerHeading, { color: colors.primary }]}>
+                  Seller Management
+                </Text>
+                <View style={styles.ownerButtonsRow}>
+                  <Pressable
+                    style={[
+                      styles.ownerBtn,
+                      isSold ? styles.relistBtn : styles.markSoldBtn,
+                    ]}
+                    onPress={onToggleSold}
+                  >
+                    <Text
+                      style={[
+                        styles.ownerBtnText,
+                        isSold ? styles.relistBtnText : styles.markSoldBtnText,
+                      ]}
+                    >
+                      {isSold ? "Relist as Available" : "✓ Mark as Sold"}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.ownerBtn, styles.deleteModalBtn]}
+                    onPress={onDelete}
+                  >
+                    <Text style={styles.deleteModalBtnText}>Delete</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
+            {/* Buyer Contact & Make an Offer Buttons */}
+            {!isOwner && (
+              <View style={styles.buyerActionWrap}>
+                <View style={styles.actionButtonsRow}>
+                  <Pressable
+                    disabled={isSold}
+                    style={[
+                      styles.primary,
+                      { backgroundColor: colors.primary, flex: 1 },
+                      isSold && styles.primaryDisabled,
+                    ]}
+                    onPress={onContact}
+                  >
+                    <Text style={styles.primaryText}>
+                      {isSold ? "Item Sold" : `💬 Message Seller`}
+                    </Text>
+                  </Pressable>
+
+                  {!isSold && (
+                    <Pressable
+                      style={[
+                        styles.offerBtn,
+                        { borderColor: colors.primary },
+                      ]}
+                      onPress={onMakeOffer}
+                    >
+                      <Text
+                        style={[styles.offerBtnText, { color: colors.primary }]}
+                      >
+                        🤝 Offer
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {/* Report Listing Link */}
+                <Pressable style={styles.reportRow} onPress={onReport}>
+                  <Text style={styles.reportText}>
+                    🚩 Flag or Report this listing
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </ScrollView>
         </View>
-      )}
+      </View>
     </Modal>
   );
 }
+
 function AuthModal({
   visible,
   onClose,
@@ -416,10 +1144,10 @@ function AuthModal({
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.backdrop}>
         <View style={styles.auth}>
-          <Text style={styles.formTitle}>Welcome to campus marketplace</Text>
+          <Text style={styles.formTitle}>Campus Marketplace</Text>
           <Text style={styles.authMessage}>
-            Sign in to save listings, message sellers, and publish your own
-            items.
+            Connect with your campus student account to sync real-time Cloud
+            Firestore data.
           </Text>
           {error ? <Text style={styles.authError}>{error}</Text> : null}
           <Pressable style={styles.googleButton} onPress={onSignIn}>
@@ -427,56 +1155,7 @@ function AuthModal({
             <Text style={styles.outlineText}>Continue with Google</Text>
           </Pressable>
           <Pressable style={styles.outline} onPress={onClose}>
-            <Text style={styles.outlineText}>Maybe later</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-function SellModal({
-  visible,
-  onClose,
-  onSubmit,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSubmit: (title: string, price: string, category: string) => Promise<void>;
-}) {
-  const [title, setTitle] = useState("");
-  const [price, setPrice] = useState("");
-  const [category, setCategory] = useState("Textbooks");
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.backdrop}>
-        <View style={styles.form}>
-          <View style={styles.formHeader}>
-            <Text style={styles.formTitle}>Sell an item</Text>
-            <Pressable onPress={onClose}>
-              <Text style={styles.closeText}>×</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.label}>What are you selling?</Text>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g. Organic Chemistry textbook"
-            style={styles.field}
-          />
-          <Text style={styles.label}>Price</Text>
-          <TextInput
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="numeric"
-            placeholder="$ 0"
-            style={styles.field}
-          />
-          <Pressable
-            disabled={!title || !price}
-            style={[styles.primary, (!title || !price) && styles.disabled]}
-            onPress={() => onSubmit(title, price, category)}
-          >
-            <Text style={styles.primaryText}>Publish listing</Text>
+            <Text style={styles.outlineText}>Close</Text>
           </Pressable>
         </View>
       </View>
@@ -492,156 +1171,350 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 82,
-    backgroundColor: "#FFF",
     borderTopWidth: 1,
-    borderTopColor: "#E8EBE5",
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
+    paddingBottom: 10,
+    paddingHorizontal: 8,
   },
-  navItem: { alignItems: "center", minWidth: 54 },
-  navIcon: { color: "#83918A", fontSize: 22 },
-  navLabel: { color: "#83918A", fontSize: 10, marginTop: 3 },
-  navActive: { color: "#1D6B54" },
+  navItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 50,
+  },
+  navIcon: {
+    fontSize: 20,
+    textAlign: "center",
+  },
+  navLabel: {
+    fontSize: 10,
+    marginTop: 2,
+    fontWeight: "700",
+  },
   badge: {
     position: "absolute",
-    right: -12,
-    top: -3,
-    backgroundColor: "#C3535B",
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    top: -4,
+    right: -10,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
     alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
   },
-  badgeText: { color: "#FFF", fontSize: 9, fontWeight: "800" },
+  badgeText: {
+    color: "#FFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
   sellButton: {
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#E6F0E6",
+    borderRadius: 20,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
+    paddingVertical: 10,
     gap: 4,
   },
-  sellPlus: { color: "#247055", fontSize: 20 },
-  sellText: { color: "#247055", fontWeight: "800", fontSize: 12 },
+  sellPlus: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  sellText: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(15,40,33,.45)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
   detail: {
-    backgroundColor: "#FFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    maxHeight: "92%",
     overflow: "hidden",
   },
-  detailImage: { width: "100%", height: 230 },
+  detailImage: {
+    width: "100%",
+    height: 250,
+    backgroundColor: "#E5ECE5",
+  },
   close: {
     position: "absolute",
     top: 14,
     right: 14,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#FFF",
-    alignItems: "center",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
-  closeText: { color: "#173C34", fontSize: 26 },
-  detailBody: { padding: 24 },
+  closeText: {
+    color: "#FFF",
+    fontSize: 22,
+    lineHeight: 24,
+  },
+  detailBody: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: "wrap",
+  },
+  detailCategoryPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
   detailCategory: {
-    color: "#23775D",
-    fontSize: 11,
+    color: "#FFF",
+    fontSize: 10,
     fontWeight: "800",
-    letterSpacing: 1.5,
+    letterSpacing: 0.8,
+  },
+  conditionPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  conditionText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  campusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  campusText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  soldBanner: {
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  soldBannerTitle: {
+    fontWeight: "800",
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  soldBannerDesc: {
+    fontSize: 11,
   },
   detailTitle: {
-    color: "#173C34",
-    fontSize: 25,
-    fontWeight: "800",
-    marginTop: 8,
-  },
-  detailPrice: {
-    color: "#1C7057",
     fontSize: 22,
     fontWeight: "800",
-    marginTop: 8,
+    marginBottom: 6,
   },
-  muted: { color: "#87918C", fontSize: 12 },
-  description: {
-    color: "#66736D",
-    fontSize: 14,
-    lineHeight: 21,
-    marginVertical: 20,
+  titleSold: {
+    color: "#87918C",
+    textDecorationLine: "line-through",
   },
-  primary: {
-    height: 50,
-    backgroundColor: "#1F5D4C",
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 24,
+  detailPrice: {
+    fontSize: 24,
+    fontWeight: "900",
+    marginBottom: 8,
   },
-  primaryText: { color: "#FFF", fontWeight: "800" },
-  auth: { backgroundColor: "#FFF", borderRadius: 20, padding: 24, margin: 20 },
-  form: {
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
+  priceSold: {
+    color: "#87918C",
+    textDecorationLine: "line-through",
   },
-  formHeader: {
+  sellerProfileBox: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  sellerHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  formTitle: { color: "#173C34", fontSize: 22, fontWeight: "800" },
-  authMessage: { color: "#87918C", lineHeight: 20, marginTop: 10 },
-  authError: {
-    color: "#B64950",
-    backgroundColor: "#FBECEE",
-    borderRadius: 10,
-    padding: 10,
-    fontSize: 12,
-    marginTop: 16,
+  sellerName: {
+    fontSize: 14,
+    fontWeight: "800",
   },
-  googleButton: {
-    height: 50,
-    borderRadius: 14,
+  sellerMajor: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  sellerRatingBox: {
+    alignItems: "flex-end",
+  },
+  sellerRatingValue: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#2E594B",
+  },
+  sellerMeetups: {
+    fontSize: 10,
+    color: "#87918C",
+  },
+  descHeading: {
+    fontSize: 14,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  ownerControls: {
     borderWidth: 1,
-    borderColor: "#D7DDD8",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+  },
+  ownerHeading: {
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 10,
+    letterSpacing: 0.5,
+  },
+  ownerButtonsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
     gap: 10,
   },
-  googleMark: { color: "#4285F4", fontSize: 18, fontWeight: "800" },
-  outline: {
+  ownerBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  ownerBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  markSoldBtn: {
+    backgroundColor: "#E4EDE6",
+  },
+  markSoldBtnText: {
+    color: "#1F5D4C",
+  },
+  relistBtn: {
+    backgroundColor: "#ECEFE9",
+  },
+  relistBtnText: {
+    color: "#4A5A52",
+  },
+  deleteModalBtn: {
+    flex: 0.5,
+    backgroundColor: "#FDF0F1",
+  },
+  deleteModalBtnText: {
+    color: "#C3535B",
+    fontWeight: "700",
+  },
+  buyerActionWrap: {
+    marginBottom: 20,
+    gap: 10,
+  },
+  actionButtonsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  offerBtn: {
     height: 50,
     borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  offerBtnText: {
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  reportRow: {
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  reportText: {
+    fontSize: 11,
+    color: "#87918C",
+    fontWeight: "600",
+  },
+  primary: {
+    height: 50,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  primaryDisabled: {
+    backgroundColor: "#A8B4AD",
+  },
+  primaryText: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  auth: {
+    backgroundColor: "#FFF",
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 24,
+    alignSelf: "center",
+    width: "90%",
+    maxWidth: 400,
+    marginBottom: 60,
+  },
+  formTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#173C34",
+    marginBottom: 8,
+  },
+  authMessage: {
+    fontSize: 13,
+    color: "#65766D",
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  authError: {
+    color: "#B64950",
+    backgroundColor: "#FDF0F1",
+    padding: 8,
+    borderRadius: 8,
+    fontSize: 11,
+    marginBottom: 12,
+  },
+  googleButton: {
+    flexDirection: "row",
+    height: 48,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#BCD0C3",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 12,
+    gap: 10,
+    marginBottom: 10,
   },
-  outlineText: { color: "#1F5D4C", fontWeight: "800" },
-  label: {
-    color: "#365B4C",
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 18,
-    marginBottom: 7,
+  googleMark: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#1F5D4C",
   },
-  field: {
-    height: 50,
-    borderWidth: 1,
-    borderColor: "#DDE4DC",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    color: "#173C34",
+  outline: {
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  disabled: { opacity: 0.45 },
+  outlineText: {
+    color: "#1F5D4C",
+    fontSize: 13,
+    fontWeight: "700",
+  },
 });
